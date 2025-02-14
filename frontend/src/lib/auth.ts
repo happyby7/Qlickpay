@@ -18,6 +18,7 @@ export const login = async (email: string, password: string) => {
         if (data.token) {
             document.cookie = `auth=${data.token}; path=/`;
             auth.set(data.token);
+            alert("Inicio de sesión exitoso. Redirigiendo...");
             goto('/dashboard');
         }
     } catch (error) {
@@ -31,6 +32,7 @@ export const register = async (full_name: string, email: string, password: strin
             method: 'POST',
             body: JSON.stringify({ full_name, email, password, role })
         });
+        alert("¡Registro exitoso! Ya puedes iniciar sesión en Qlickpay.");
         goto('/dashboard');
     } catch (error) {
         throw new Error("Error en registro");

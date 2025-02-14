@@ -15,11 +15,15 @@
     let full_name = '';
     let passwordConfirm = '';
     let error = '';
-    
+    let successMessage = '';
+
     const handleLogin = async () => {
       error = '';
+      successMessage = '';
       try {
         await login(email, password);
+        successMessage = "Inicio de sesión exitoso. Redirigiendo...";
+        setTimeout(() => goto('/dashboard'), 1000)
       } catch (e) {
         console.error(e);
         error = 'Error en autenticación';
@@ -28,12 +32,14 @@
   
     const handleRegister = async () => {
       error = '';
+      successMessage = '';
       if (password !== passwordConfirm) {
         error = 'Las contraseñas no coinciden';
         return;
       }
       try {
         await register(full_name, email, password);
+        successMessage = "¡Registro exitoso! Ya puedes iniciar sesión en Qlickpay.";
       } catch (e) {
         console.error(e);
         error = 'Error en el registro';
@@ -42,19 +48,29 @@
   
     const switchToLogin = () => {
       isRegistering = false;
-     sessionStorage.setItem('isRegistering', 'false');
+      successMessage = '';
+      sessionStorage.setItem('isRegistering', 'false');
       goto('/auth', { replaceState: true });
     };
   
     const switchToRegister = () => {
       isRegistering = true;
+      successMessage = '';
       sessionStorage.setItem('isRegistering', 'true');
-     goto('/auth?register=true', { replaceState: true });
+      goto('/auth?register=true', { replaceState: true });
     };
 
 </script>
 
 <div class="auth-container">
+    {#if successMessage}
+      <p class="success-text">{successMessage}</p>
+    {/if}
+
+    {#if error}
+      <p class="error-text">{error}</p>
+    {/if}
+
     {#if isRegistering}
       <h2>Registro</h2>
       <form on:submit|preventDefault={handleRegister}>
