@@ -6,10 +6,12 @@ WORKDIR /app
 COPY frontend/package*.json ./
 
 # Instala las dependencias
-RUN npm install
+RUN npm install 
 
 # Copia el resto del código fuente después de instalar dependencias
 COPY frontend/. .
+
+RUN npm run build || true
 
 # Expone el puerto
 EXPOSE 3000

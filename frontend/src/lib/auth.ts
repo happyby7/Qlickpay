@@ -1,13 +1,8 @@
 import { writable } from 'svelte/store';
 import { apiFetch } from '../lib/api';
-import { goto } from '$app/navigation';
+import { jwtDecode } from "jwt-decode";
 
 export const auth = writable<string | null>(null);
-
-export const checkAuth = () => {
-    const token = document.cookie.split('; ').find(row => row.startsWith('auth='))?.split('=')[1];
-    auth.set(token || null);
-};
 
 export const login = async (email: string, password: string) => {
     try {
@@ -15,11 +10,12 @@ export const login = async (email: string, password: string) => {
             method: 'POST',
             body: JSON.stringify({ email, password })
         });
+
         if (data.token) {
             document.cookie = `auth=${data.token}; path=/`;
             auth.set(data.token);
-            alert("Inicio de sesión exitoso. Redirigiendo...");
-            goto('/dashboard');
+            const decoded: any = jwtDecode(data.token);
+            return { role: decoded.role};
         }
     } catch (error) {
         throw new Error("Error en autenticación");
@@ -32,19 +28,31 @@ export const register = async (full_name: string, email: string, password: strin
             method: 'POST',
             body: JSON.stringify({ full_name, email, password, role })
         });
-        alert("¡Registro exitoso! Ya puedes iniciar sesión en Qlickpay.");
-        goto('/dashboard');
+        return { success: true };
     } catch (error) {
-        throw new Error("Error en registro");
+        return { success: false, message: "Error en el registro" };
     }
+};
+export const logout = async () => {
+  try {
+    await apiFetch("/api/auth/logout", { method: "POST" });
+  } catch (error) {
+    console.error("Error al cerrar sesión en el servidor:", error);
+  }
+  auth.set(null);
+  sessionStorage.removeItem("isGuest");
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  return { restaurantId: sessionStorage.getItem("restaurantId") || "", tableId: sessionStorage.getItem("tableId") || "" };
 };
 
-export const logout = async () => {
+export const getTokenFromCookies = async (cookie: string, fetchFn: typeof fetch) => {
     try {
-        document.cookie = "auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-        auth.set(null);
-        goto('/auth');
+      const data = await apiFetch("/api/auth/get-cookies", { cookie }, fetchFn);
+      return data.cookies || null;
     } catch (error) {
-        throw new Error("Error al cerrar sesión");
+      console.error("❌ Error al obtener el token en SSR:", error);
+      return null;
     }
-};
+  };
+  

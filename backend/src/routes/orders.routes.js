@@ -1,11 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const ordersController = require("../controllers/orders.controller");
 
-// Ruta para obtener todos los pedidos
-router.get("/", ordersController.getAllOrders); 
+const {placeOrder}= require("../controllers/orders.controller");
 
-// Ruta para crear un nuevo pedido
-router.post("/", ordersController.createOrder);
+router.post("/", placeOrder);
 
 module.exports = router;

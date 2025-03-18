@@ -1,16 +1,17 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
-    import { auth } from '$lib/auth';
-    import { browser } from '$app/environment';
+    import { logout } from '$lib/auth';
   
-    function handleLogout() {
-      if (browser) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        auth.set(null);
-        goto('/');
-      }
+    async function handleLogout() {
+        const { restaurantId, tableId } = await logout(); 
+
+        if (restaurantId && tableId) {
+            goto(`/auth?restaurantId=${restaurantId}&tableId=${tableId}`);
+        } else {
+            goto("/auth");
+        }
     }
+
 </script>
   
 <button on:click={handleLogout}>Cerrar Sesión</button>

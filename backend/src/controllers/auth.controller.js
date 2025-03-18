@@ -1,7 +1,8 @@
-const bcrypt = require("bcryptjs");
-const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const bcrypt = require("bcryptjs");
+const jwt = require('jsonwebtoken');
 const { sendVerificationEmail } = require('../services/email');
 
 const register = async (req, res) => {
@@ -22,20 +23,64 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
     const { email, password } = req.body;
+
+    if (!email || !password) {
+        console.warn("⚠️ Solicitud de login sin email o password.");
+        return res.status(400).json({ error: "Faltan credenciales." });
+    }
+
     try {
         const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+
         const user = userResult.rows[0];
         
         if (!user || !(await bcrypt.compare(password, user.password_hash))) {
             return res.status(401).json({ error: "Credenciales inválidas" });
         }
 
-        console.log( "MI JWT!!! "+ process.env.JWT_SECRET);
-        const token = jwt.sign({ id: user.id, role: user.role, name:user.full_name}, process.env.JWT_SECRET, { expiresIn: '15m' }); //REVISAR LO DEL JWT
-        res.json({ token });
+        let restaurantId = null;
+        if (user.role === "owner" || user.role === "waiter") {
+            const restaurantResult = await pool.query(
+                "SELECT restaurant_id FROM user_restaurant WHERE user_id = $1",
+                [user.id]
+            );
+            if (restaurantResult.rowCount > 0) {
+                restaurantId = restaurantResult.rows[0].restaurant_id;
+            }
+        }
+
+        const token = jwt.sign({ id: user.id, role: user.role, name:user.full_name, restaurantId }, process.env.JWT_SECRET, { expiresIn: '15m' }); 
+
+        const cookieOptions = {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            path: '/',
+            maxAge: 15 * 60 * 1000,
+          };
+
+        res.cookie("auth", token, cookieOptions);
+        res.json({ success: true, token, role: user.role });
     } catch (error) {
-        res.status(500).json({ error: "Error en el inicio de sesión" });
+        console.error("❌ Error en login:", error);
+        res.status(500).json({ error: "Error en el servidor." });
     }
 };
 
-module.exports = { register, login };
+const cookies = (req, res) => {
+    res.json({ cookies: req.cookies || "Cookies no recividas" });
+};
+
+const logout = (req, res) => {
+    const cookieOptions = {
+     httpOnly: true,
+     secure: false,
+     sameSite: "lax",
+     path: '/',
+    };
+    
+    res.clearCookie("auth", cookieOptions);
+    res.json({ success: true });
+  };
+
+module.exports = { register, login, cookies, logout};

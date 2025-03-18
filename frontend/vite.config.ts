@@ -18,6 +18,9 @@ export default defineConfig(({ mode }) => {
         },
         define: {
             'process.env': env
+        },
+        ssr: {
+            noExternal: ['jwt-decode']
         }
     };
 });
