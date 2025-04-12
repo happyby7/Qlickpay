@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import { login, register } from "$lib/auth";
   import { page } from "$app/stores"; 
+  import { onMount } from "svelte";
 
   export let isRegistering: boolean;
   export let restaurantId: string;
@@ -13,6 +14,29 @@
   let passwordConfirm = "";
   let error = "";
   let successMessage = "";
+
+  onMount(() => {
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+         location.reload();
+      }
+    }); 
+
+    const url = new URL(window.location.href);
+    const qsRestaurantId = url.searchParams.get("restaurantId") || "";
+    const qsTableId = url.searchParams.get("tableId") || "";
+
+    if (qsRestaurantId && qsTableId) {
+      sessionStorage.setItem("restaurantId", qsRestaurantId);
+      sessionStorage.setItem("tableId", qsTableId);
+      restaurantId = qsRestaurantId;
+      tableId = qsTableId;
+    } else {
+      restaurantId = sessionStorage.getItem("restaurantId") || "";
+      tableId = sessionStorage.getItem("tableId") || "";
+    }
+  });
+
   
   $: isRegistering = $page.url.searchParams.get("register") === "true";
 

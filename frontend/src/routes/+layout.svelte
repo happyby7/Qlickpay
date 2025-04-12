@@ -37,7 +37,6 @@
   let role = "customer";
   $: if ($auth) {
     try {
-      // Se mantiene la importación y uso original de jwt-decode
       role = (jwtDecode($auth) as { role?: string })?.role || "customer";
     } catch (error) {
       console.error("❌ Error al decodificar el token:", error);

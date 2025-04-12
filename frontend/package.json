@@ -24,6 +24,7 @@
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
 		"@tailwindcss/forms": "^0.5.10",
 		"@tailwindcss/typography": "^0.5.16",
+		"@types/jsonwebtoken": "^9.0.9",
 		"@types/node": "^22.13.1",
 		"autoprefixer": "^10.4.20",
 		"drizzle-kit": "^0.30.2",
@@ -47,9 +48,11 @@
 		"@oslojs/encoding": "^1.1.0",
 		"drizzle-orm": "^0.38.4",
 		"frontend": "file:",
+		"jsonwebtoken": "^9.0.2",
 		"jsqr": "^1.4.0",
 		"jwt-decode": "^4.0.0",
 		"postgres": "^3.4.5",
-		"socket.io-client": "^4.8.1"
+		"socket.io-client": "^4.8.1",
+		"svelte-guard": "^1.0.0"
 	}
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
+    import { onMount } from "svelte";
 
     $: user = $page.data.user;
     $: restaurantId = $page.data.restaurantId;
@@ -24,16 +25,24 @@
     function goToRestaurant() {
         goto(`/restaurants`);
     }
+
+    onMount(() => {
+      window.addEventListener('pageshow', (event) => {
+       if (event.persisted) {
+        location.reload();
+       }
+      });  
+    });
 </script>
 
 <div class="dashboard-container">
-    <h1>Dashboard del Cliente</h1>
+    <h1>Bienvenido {user.name}</h1>
     {#if hasQRParams}
-        <p>Bienvenido {user.name}, estás en la mesa {tableId || "No asignada"} del restaurante {restaurantId || "No asignado"}.</p>
+        <p>!No esperes y pide ya!</p>
         <button on:click={goToMenu}>📜 Ver Carta y Pedir</button>
         <button on:click={goToOrder}>💳 Pagar la Cuenta</button>
     {:else}
-        <p>Bienvenido {user.name}, explora nuestros restaurantes antes de llegar.</p>
+        <p>Explora nuestros restaurantes antes de llegar.</p>
         <button on:click={goToRestaurant}>🍽️ Explorar Restaurantes</button>
         <p style="color: gray;">Para pedir o pagar, escanea un código QR en el restaurante.</p>
     {/if}
@@ -45,6 +54,7 @@
         max-width: 600px;
         margin: 0 auto;
         text-align: center;
+        font-family: "Segoe UI", Roboto, sans-serif;
     }
 
     button {
@@ -58,6 +68,7 @@
         cursor: pointer;
         background-color: #007BFF;
         color: white;
+        font-family: "Segoe UI", Roboto, sans-serif;
     }
 
     button:hover {

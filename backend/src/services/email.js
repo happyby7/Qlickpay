@@ -1,25 +1,34 @@
 const axios = require("axios");
+require('dotenv').config();
 
 const sendVerificationEmail = async (email) => {
-    try {
-        console.log("📤 Enviando email a:", email);
-        const response = await axios.post("https://api.brevo.com/v3/smtp/email", {
-            sender: { email: "no-reply@qlickpay.com", name: "QlickPay" },
-            to: [{ email }],
-            subject: "Verificación de Cuenta - QlickPay",
-            htmlContent: "<p>¡Bienvenido a <strong>QlickPay</strong>! Haz clic en el siguiente enlace para verificar tu cuenta.</p>"
-        }, {
-            headers: {
-                "accept": "application/json",
-                "api-key": "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",
-                "content-type": "application/json"
-            }
-        });
+  try {
+    const response = await axios.post(
+      process.env.BREVO_API_URL, 
+      {
+        sender: {
+          email: process.env.BREVO_SENDER_EMAIL,
+          name: "QlickPay"
+        },
+        to: [{ email }],
+        subject: "Verificación de Cuenta - QlickPay",
+        htmlContent:
+          "<p>¡Bienvenido a <strong>QlickPay</strong>! Haz clic en el siguiente enlace para verificar tu cuenta.</p>"
+      },
+      {
+        headers: {
+          accept: "application/json",
+          "api-key": process.env.BREVO_API_KEY,
+          "content-type": "application/json"
+        }
+      }
+    );
 
-        console.log("✅ Email enviado con éxito a:", email, response.data);
-    } catch (error) {
-        console.error("❌ Error al enviar email:", error.response ? error.response.data : error);
-    }
+    console.log("✅ Email enviado con éxito a:", email, response.data);
+  } catch (error) {
+    const errorMsg = error.response?.data || error.message || error;
+    console.error("❌ Error al enviar email:", errorMsg);
+  }
 };
 
 module.exports = { sendVerificationEmail };

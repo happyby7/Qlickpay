@@ -38,3 +38,14 @@ export async function deleteWaiter(waiterId: number) {
     });
 }
 
+export async function updateOrderItem(restaurantId: string, tableId: string, itemName: string, removalQuantity: number): Promise<any> {
+  try {
+    return await apiFetch('/api/waiter/update-order-item', {
+      method: 'POST',
+      body: JSON.stringify({ restaurantId, tableId, itemName, removalQuantity })
+    });
+  } catch (error) {
+    console.error("Error actualizando item del pedido:", error);
+  }
+}
+

@@ -65,11 +65,14 @@ const placeOrder = async (req, res) => {
             .join(",")}`;
 
         const flattenedValues = orderItemsValues.flat();
-        await pool.query(insertOrderItemsQuery, flattenedValues);
+        await pool.query(insertOrderItemsQuery, flattenedValues);    
 
         await pool.query("COMMIT"); 
 
-        if (global.websocket) global.websocket.newOrderEvent('newOrder',JSON.stringify({ tableId: table_id }));
+        if (global.websocket){
+            global.websocket.newOrderEvent('newOrder',JSON.stringify({ tableId: table_id }));
+            global.websocket.updateStatusTable('updateTableStatus', JSON.stringify({ tableId: table_id, status: 'occupied' }));
+        } 
 
         res.json({ success: true, message: "Pedido registrado exitosamente.", orderId });
 
@@ -80,4 +83,29 @@ const placeOrder = async (req, res) => {
     }
 };
 
-module.exports = {placeOrder};
+const getTableStatus = async (req, res) => {
+    const { restaurantId, tableId } = req.params;
+  
+    if (!restaurantId || !tableId) {
+      return res.status(400).json({ error: 'Faltan parámetros.' });
+    }
+  
+    try {
+      const result = await pool.query(
+        `SELECT status FROM tables WHERE id = $1 AND restaurant_id = $2`,
+        [tableId, restaurantId]
+      );
+  
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'Mesa no encontrada.' });
+      }
+  
+      res.json({ status: result.rows[0].status });
+    } catch (err) {
+      console.error('❌ Error en getTableStatus:', err);
+      res.status(500).json({ error: 'Error en el servidor.' });
+    }
+  };
+  
+
+module.exports = {placeOrder, getTableStatus};

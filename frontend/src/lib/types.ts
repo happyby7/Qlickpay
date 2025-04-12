@@ -33,3 +33,13 @@ export interface TokenPayload {
     name?: string;
     restaurantId?: number | null;
 }
+
+export interface ModeState {
+    value: 'none' | 'split-items' | 'custom';
+}
+
+export interface GuardOptions {
+    requireParams?: boolean;
+  }
+  
+

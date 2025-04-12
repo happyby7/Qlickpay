@@ -1,5 +1,6 @@
-export const API_URL = browser ? import.meta.env.VITE_API_URL : "http://backend:5000";
-import { browser } from "$app/environment";
+import { browser } from "$app/environment"; 
+export const API_URL = browser ? import.meta.env.VITE_API_URL : import.meta.env.VITE_BACKEND_API_URL;
+
 
 export async function apiFetch(endpoint: string, options: RequestInit & { cookie?: string } = {}, fetchFn: typeof fetch = fetch) {
     let token: string | null = null;

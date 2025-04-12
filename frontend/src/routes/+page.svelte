@@ -2,8 +2,8 @@
   import { auth } from "$lib/auth";
   import { goto } from "$app/navigation";
   import { jwtDecode } from "jwt-decode";
+  import { onMount } from "svelte";
 
-  // Se leen los parámetros guardados en sessionStorage
   let restaurantId = "";
   let tableId = "";
   if (typeof window !== "undefined") {
@@ -52,11 +52,19 @@
       goto(`/dashboard/${role}`);
     }
   }
+
+  onMount(() => {
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        location.reload();
+      }
+    });  
+  });
 </script>
 
 {#if !$auth}
   <div class="bienvenida">
-    <h1>Bienvenido a QlickPay</h1>
+    <h1>QlickPay</h1>
     <button class="register" on:click={() => goToAuth('register')}>Registrarse</button>
     <button class="login" on:click={() => goToAuth('login')}>Iniciar Sesión</button>
     <button class="guest" on:click={enterAsGuest}>Entrar como Invitado</button>

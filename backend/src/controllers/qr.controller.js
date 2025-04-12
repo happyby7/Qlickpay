@@ -12,41 +12,53 @@ const generateQR = async (req, res) => {
     try {
         const qrCodes = [];
 
-        for (let i = 1; i <= tableCount; i++) {  //192.168.1.45
-            const qrData = `${i}http://172.28.112.1:3000/scan?restaurantId=${restaurantId}&tableId=${tableCount}`; //CAMBIAR CUIDADO----------------
-            const qrImage = await QRCode.toDataURL(qrData);
+        for (let i = 1; i <= tableCount; i++) {
             const qrCode = `QR-${restaurantId}-${i}`;
-
-            // Verificar si el QR ya existe
+          
             const existingQR = await pool.query(
-                "SELECT id FROM qr_codes WHERE code = $1",
-                [qrCode]
+              "SELECT id FROM qr_codes WHERE code = $1",
+              [qrCode]
             );
-
+          
             let qrId;
             if (existingQR.rows.length > 0) {
-                qrId = existingQR.rows[0].id;
+              qrId = existingQR.rows[0].id;
             } else {
-                const qrResult = await pool.query(
-                    `INSERT INTO qr_codes (code, restaurant_id, is_active, created_at, updated_at)
-                     VALUES ($1, $2, TRUE, NOW(), NOW())
-                     RETURNING id;`,
-                    [qrCode, restaurantId]
-                );
-                qrId = qrResult.rows[0].id;
+              const qrResult = await pool.query(
+                `INSERT INTO qr_codes (code, restaurant_id, is_active, created_at, updated_at)
+                 VALUES ($1, $2, TRUE, NOW(), NOW())
+                 RETURNING id;`,
+                [qrCode, restaurantId]
+              );
+              qrId = qrResult.rows[0].id;
             }
-
+          
             await pool.query(
-                `INSERT INTO tables (restaurant_id, table_number, qr_code_id, status, created_at, updated_at)
-                 VALUES ($1, $2, $3, 'available', NOW(), NOW())
-                 ON CONFLICT (restaurant_id, table_number) 
-                 DO UPDATE SET qr_code_id = EXCLUDED.qr_code_id;`,
-                [restaurantId, i, qrId]
+              `INSERT INTO tables (restaurant_id, table_number, qr_code_id, status, created_at, updated_at)
+               VALUES ($1, $2, $3, 'available', NOW(), NOW())
+               ON CONFLICT (restaurant_id, table_number)
+               DO UPDATE SET qr_code_id = EXCLUDED.qr_code_id;`,
+              [restaurantId, i, qrId]
             );
-
+          
+            const tableResult = await pool.query(
+              `SELECT id FROM tables WHERE restaurant_id = $1 AND table_number = $2`,
+              [restaurantId, i]
+            );
+            const tableId = tableResult.rows[0].id;
+          
+            const cleanRestaurantId = parseInt(restaurantId, 10);
+            const cleanTableId = parseInt(tableId, 10);
+            
+            if (isNaN(cleanRestaurantId) || isNaN(cleanTableId)) {
+              return res.status(400).json({ error: 'Parámetros inválidos.' });
+            }
+            
+            const qrData = `${process.env.FRONTEND_URL}/scan?restaurantId=${cleanRestaurantId}&tableId=${cleanTableId}`;
+            const qrImage = await QRCode.toDataURL(qrData);
+          
             qrCodes.push(qrImage);
-        }
-
+          }
         res.json({ success: true, qrCodes });
     } catch (error) {
         console.error("❌ Error al generar QR:", error);
@@ -58,8 +70,6 @@ async function getTableBill(req, res) {
     const { restaurantId, tableId } = req.params;
 
     try {
-        console.log(`📡 API llamada con restaurantId: ${restaurantId}, tableId: ${tableId}`);
-
         const { rows } = await pool.query(
             `SELECT 
                 o.id AS order_id, 
@@ -81,6 +91,17 @@ async function getTableBill(req, res) {
             ORDER BY o.created_at ASC;`, 
             [restaurantId, tableId]
         );
+
+        const mesa = await pool.query("SELECT status FROM tables WHERE id = $1", [tableId]);
+        const estadoActual = mesa.rows[0]?.status;
+
+        if (estadoActual !== 'paid') {
+          if (rows.length > 0) {
+            await pool.query("UPDATE tables SET status = 'occupied' WHERE id = $1", [tableId]);
+          } else {
+            await pool.query("UPDATE tables SET status = 'available' WHERE id = $1", [tableId]);
+          }
+        }
 
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
         res.setHeader("Pragma", "no-cache");

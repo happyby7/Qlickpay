@@ -11,31 +11,32 @@ const adminRoutes = require("./routes/admin.routes");
 const restaurantRoutes = require("./routes/restaurant.routes");
 const menuRoutes = require("./routes/menu.routes");
 const waiterRoutes = require("./routes/waiter.routes.js");
+const paymentRoutes = require('./routes/payments.routes.js');
 
 const app = express();
 
-const allowedOrigins = [
-    "http://localhost:3000",
-    "http://192.168.1.45:3000",
-    "http://172.28.112.1:3000",
-    "http://192.168.168.190:3000"
-];
-
-app.use(cookieParser());
-app.use(cors({
-    origin: allowedOrigins,
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+const corsOptions = {
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("❌ No permitido por CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
-}));
+  };
+
+app.use(cookieParser());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(morgan("dev")); // Registra las solicitudes HTTP en la consola para depuración
 
-
 // Manejo explícito de pre-flight OPTIONS requests
-app.options("*", cors());
+app.options("/api/*", cors(corsOptions));
 
-// Rutas
 app.use("/api/auth", authRoutes);
 app.use("/api/qr", qrRoutes);
 app.use("/api/admin", adminRoutes);
@@ -43,8 +44,8 @@ app.use("/api/restaurant", restaurantRoutes);
 app.use("/api/order", ordersRoutes);
 app.use("/api/waiter", waiterRoutes);
 app.use("/api/menu", menuRoutes);
+app.use('/api/payment', paymentRoutes);
 
-// Middleware de manejo de errores
 app.use((err, req, res, next) => {
     console.error("❌ Error en el backend:", err);
     res.status(500).json({ message: "Error interno en el servidor" });
