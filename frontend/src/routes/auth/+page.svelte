@@ -14,6 +14,10 @@
   let passwordConfirm = "";
   let error = "";
   let successMessage = "";
+  let jwtExpiredMessage = "";
+
+  $: isRegistering = $page.url.searchParams.get("register") === "true";
+  $: sessionExpired = $page.url.searchParams.get('sessionExpired') === 'true';
 
   onMount(() => {
     window.addEventListener('pageshow', (event) => {
@@ -35,10 +39,11 @@
       restaurantId = sessionStorage.getItem("restaurantId") || "";
       tableId = sessionStorage.getItem("tableId") || "";
     }
-  });
 
-  
-  $: isRegistering = $page.url.searchParams.get("register") === "true";
+    if (sessionExpired) {
+     jwtExpiredMessage = "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.";
+    }
+  });
 
   const handleLogin = async () => {
       error = "";
@@ -121,6 +126,9 @@ const switchToRegister = () => {
 </script>
 
 <div class="auth-container">
+  {#if jwtExpiredMessage}
+      <p class="success-text session-expired">{jwtExpiredMessage}</p>
+  {/if}
   {#if successMessage}
       <p class="success-text">{successMessage}</p>
   {/if}
@@ -254,6 +262,14 @@ const switchToRegister = () => {
             width: 90%;
             padding: 20px;
         }
+    }
+
+    .session-expired {
+        font-size: 0.9em;
+        margin-top: 10px;
+        border-radius: 6px;
+        background: #DFF2BF; 
+        color: #4F8A10;
     }
 </style>
   

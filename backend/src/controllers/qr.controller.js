@@ -95,14 +95,8 @@ async function getTableBill(req, res) {
         const mesa = await pool.query("SELECT status FROM tables WHERE id = $1", [tableId]);
         const estadoActual = mesa.rows[0]?.status;
 
-        if (estadoActual !== 'paid') {
-          if (rows.length > 0) {
-            await pool.query("UPDATE tables SET status = 'occupied' WHERE id = $1", [tableId]);
-          } else {
-            await pool.query("UPDATE tables SET status = 'available' WHERE id = $1", [tableId]);
-          }
-        }
-
+        if (estadoActual === 'available' && rows.length > 0) await pool.query("UPDATE tables SET status = 'occupied' WHERE id = $1", [tableId]);
+        
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
         res.setHeader("Pragma", "no-cache");
         res.setHeader("Expires", "0");

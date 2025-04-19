@@ -33,16 +33,23 @@ export const register = async (full_name: string, email: string, password: strin
         return { success: false, message: "Error en el registro" };
     }
 };
+
 export const logout = async () => {
   try {
-    await apiFetch("/api/auth/logout", { method: "POST" });
+    await apiFetch("/api/auth/logout", { method: "POST", credentials: 'include', skipAuth: true });
+    if (typeof document !== 'undefined') {
+      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    }
   } catch (error) {
     console.error("Error al cerrar sesión en el servidor:", error);
   }
+  
   auth.set(null);
   sessionStorage.removeItem("isGuest");
   localStorage.removeItem("token");
   localStorage.removeItem("user");
+  if (typeof document !== "undefined") document.cookie = "auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+  
   return { restaurantId: sessionStorage.getItem("restaurantId") || "", tableId: sessionStorage.getItem("tableId") || "" };
 };
 
@@ -54,5 +61,15 @@ export const getTokenFromCookies = async (cookie: string, fetchFn: typeof fetch)
       console.error("❌ Error al obtener el token en SSR:", error);
       return null;
     }
-  };
+};
+
+export const fetchSessionToken = async (restaurantId: string, tableId: string, fetchFn: typeof fetch): Promise<string | null> => {
+  try {
+    const data = await apiFetch(`/api/auth/get-session-token-table?restaurantId=${restaurantId}&tableId=${tableId}`, {}, fetchFn);
+    return data?.token || null;
+  } catch (error) {
+    console.error("❌ Error al obtener session token de la mesa en SSR:", error);
+    return null;
+  }
+};
   

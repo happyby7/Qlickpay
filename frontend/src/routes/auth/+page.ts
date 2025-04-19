@@ -1,18 +1,21 @@
-import type { PageLoad } from "./$types";
+import type { PageLoad } from './$types';
+import { browser } from '$app/environment';
 
-export const load: PageLoad = async ({ url }: { url: URL }) => {
-    let isRegistering = url.searchParams.get("register") === "true";
-    let restaurantId = url.searchParams.get("restaurantId") || "";
-    let tableId = url.searchParams.get("tableId") || "";
+export const load: PageLoad = async ({ data }) => {
+  let { isRegistering, restaurantId, tableId } = data;
 
-    if (typeof window !== "undefined") {
-        restaurantId = restaurantId || sessionStorage.getItem("restaurantId") || "";
-        tableId = tableId || sessionStorage.getItem("tableId") || "";
+  if (browser) {
+    restaurantId = restaurantId || sessionStorage.getItem('restaurantId') || '';
+    tableId = tableId || sessionStorage.getItem('tableId')      || '';
 
-        if (restaurantId && tableId) {
-            sessionStorage.setItem("restaurantId", restaurantId);
-            sessionStorage.setItem("tableId", tableId);
-        } 
+    if (restaurantId && tableId) {
+      sessionStorage.setItem('restaurantId', restaurantId);
+      sessionStorage.setItem('tableId', tableId);
+    } else {
+      sessionStorage.removeItem('restaurantId');
+      sessionStorage.removeItem('tableId');
     }
-    return { isRegistering, restaurantId, tableId };
+  }
+
+  return { isRegistering, restaurantId, tableId };
 };

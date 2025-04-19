@@ -9,11 +9,11 @@ export async function sendOrder(pedido: { table_id: string; order_type: string; 
     });
 }
 
-export async function fetchTableStatus(restaurantId: number,tableId: number): Promise<{ status: 'available' | 'occupied' | 'paid' }> {
-    try {
-      return await apiFetch(`/api/order/status-table/${restaurantId}/${tableId}`);
-    } catch (error) {
-      console.error(`Error obteniendo el estado de la mesa ${tableId}:`, error);
-      throw error;
-    }
+export async function fetchTableStatus(restaurantId: number,tableId: number ): Promise<{ status: 'available' | 'occupied' | 'paid' } | null> {
+  try {
+    return await apiFetch(`/api/order/status-table/${restaurantId}/${tableId}`);
+  } catch (error) {
+    console.error(`❌ Error obteniendo el estado de la mesa ${tableId}:`, error);
+    return null; 
   }
+}

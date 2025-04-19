@@ -22,7 +22,7 @@
     if (!restaurantId || !tableId) return;
     try {
       const result = await fetchTableStatus(Number(restaurantId), Number(tableId));
-      if (result.status === "paid") {
+      if (result && result.status === "paid") {
         console.warn(`La mesa ya está pagada. Redirigiendo a la página principal...`);
         goto('/');
       }

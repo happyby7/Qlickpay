@@ -1,7 +1,9 @@
+// src/hooks.server.ts
 import { type Handle } from '@sveltejs/kit';
 import { createGuardHook } from 'svelte-guard';
 import jwt from 'jsonwebtoken';
 import { PRIVATE_JWT_SECRET } from '$env/static/private';
+import { redirect } from '@sveltejs/kit';
 
 const guards = import.meta.glob('./routes/**/-guard.*');
 const guardHandle = createGuardHook(guards);
@@ -12,16 +14,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   if (token) {
     try {
-      const user = verify(token, PRIVATE_JWT_SECRET); 
-      event.locals.user = user;
-    } catch (error) {
-        if (error instanceof Error) {
-          console.warn('❌ Token inválido o expirado:', error.message);
-        } else {
-          console.warn('❌ Error desconocido al verificar el token:', error);
-        }
-        event.locals.user = null;
+      event.locals.user = verify(token, PRIVATE_JWT_SECRET);
+    } catch (error: any) {
+      if (error.name === 'TokenExpiredError') {
+        event.cookies.delete('auth', { path: '/' });
+        throw redirect(303, '/auth?sessionExpired=true');
       }
+      console.warn('❌ Token inválido:', error.message);
+      event.locals.user = null;
+    }
   }
   return guardHandle({ event, resolve });
 };

@@ -3,6 +3,10 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const authenticate = (req, res, next) => {
+  if (req.method === 'POST' && req.originalUrl.endsWith('/api/auth/logout')) {
+    return next();
+  }
+
   let token;
 
   if (req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {

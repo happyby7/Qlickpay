@@ -66,15 +66,41 @@ const cookies = (req, res) => {
 };
 
 const logout = (req, res) => {
-    const cookieOptions = {
-     httpOnly: true,
-     secure: false,
-     sameSite: "lax",
-     path: '/',
-    };
+    const cookieOptions = {httpOnly: true, secure: false, sameSite: "lax", path: '/',};
     
     res.clearCookie("auth", cookieOptions);
     res.json({ success: true });
+};
+
+const getSessionTokenTable = async (req, res) => {
+    const { restaurantId, tableId } = req.query;
+  
+    if (!restaurantId || !tableId) {
+      return res.status(400).json({ error: 'Faltan parámetros.' });
+    }
+  
+    try {
+      const result = await pool.query(
+        `SELECT session_token, session_expires_at 
+         FROM tables 
+         WHERE restaurant_id = $1 AND id = $2`,
+        [restaurantId, tableId]
+      );
+  
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'Mesa no encontrada.' });
+      }
+  
+      const { session_token, session_expires_at } = result.rows[0];
+  
+      if (!session_token || new Date() > new Date(session_expires_at)) {
+        return res.status(403).json({ error: 'Sesión expirada o no activa.' });
+      }  
+      return res.json({ token: session_token });
+    } catch (error) {
+      console.error("❌ Error obteniendo session_token:", error);
+      return res.status(500).json({ error: 'Error interno del servidor.' });
+    }
   };
 
-module.exports = { register, login, cookies, logout};
+module.exports = { register, login, cookies, logout, getSessionTokenTable};

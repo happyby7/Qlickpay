@@ -49,3 +49,28 @@ export async function updateOrderItem(restaurantId: string, tableId: string, ite
   }
 }
 
+export async function generateSessionTokenTable(restaurantId: string, tableId: string): Promise<any> {
+    try {
+      return await apiFetch('/api/waiter/generate-session-token-table', {
+        method: 'POST',
+        body: JSON.stringify({ restaurantId, tableId })
+      });
+    } catch (error) {
+      console.error("Error generando el token de sesión:", error);
+    }
+}
+  
+export async function clearSessionTokenTable(tableId: number): Promise<any> {
+    try {
+      return await apiFetch(`/api/waiter/clear-session-token-table`, {
+        method: 'POST',
+        body: JSON.stringify({ tableId })
+      });
+    } catch (error) {
+      console.error("Error al limpiar el token de sesión:", error);
+    }
+}
+  
+
+
+  

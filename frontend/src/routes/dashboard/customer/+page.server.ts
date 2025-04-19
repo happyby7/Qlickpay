@@ -3,11 +3,21 @@ import { getTokenFromCookies } from "$lib/auth";
 import { jwtDecode } from "jwt-decode";
 import type { TokenPayload } from "$lib/types";
 import { redirect } from "@sveltejs/kit";
+import { validateSessionToken } from '$lib/guard';
 
 export const load: PageServerLoad = async ({ url, cookies, fetch }) => {
   const restaurantId = url.searchParams.get("restaurantId") || "";
   const tableId = url.searchParams.get("tableId") || "";
   const hasQRParams = !!(restaurantId && tableId);
+
+  if (hasQRParams) {
+    try {
+      await validateSessionToken(restaurantId, tableId, cookies, fetch);
+    } catch {
+      console.error('Validación de token de sesión de mesa fallida. Redirigiendo...');
+      throw redirect(302, "/");
+    }
+  }
 
   const authCookie = cookies.get("auth") || "";
   let token: string | null | { auth: string } = await getTokenFromCookies(authCookie, fetch);

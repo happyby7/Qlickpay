@@ -21,7 +21,7 @@ const getMenuByRestaurant = async (req, res) => {
         }
 
         res.json({ success: true, menuItems: result.rows });
-    } catch (error) {
+    } catch (error) { 
         console.error("❌ Error al obtener el menú:", error);
         res.status(500).json({ success: false, message: "Error al obtener el menú." });
     }

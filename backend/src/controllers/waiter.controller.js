@@ -1,6 +1,7 @@
 const { Pool } = require("pg");
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const bcrypt = require("bcryptjs");
+const crypto = require('crypto');
 
 const getTables = async (req, res) => {
     try {
@@ -11,13 +12,14 @@ const getTables = async (req, res) => {
             `SELECT t.id, t.table_number,
               CASE 
                 WHEN t.status = 'paid' THEN 'paid'
+                WHEN t.status = 'occupied' THEN 'occupied'
                 WHEN COUNT(o.id) > 0 THEN 'occupied'
                 ELSE 'available'
               END AS status
             FROM tables t
-            LEFT JOIN orders o ON t.id = o.table_id AND o.status IN ('pending', 'in preparation')
+            LEFT JOIN orders o ON t.id = o.table_id AND o.status IN ('pending')
             WHERE t.restaurant_id = $1
-            GROUP BY t.id`,
+            GROUP BY t.id, t.status, t.table_number`,
             [restaurantId]
         );
 
@@ -41,7 +43,7 @@ const updateTableStatus = async (req, res) => {
 
     if (status === 'available') {
       const activeOrders = await pool.query(
-        `SELECT id FROM orders WHERE table_id = $1 AND status IN ('pending', 'in preparation', 'served')`,
+        `SELECT id FROM orders WHERE table_id = $1 AND status IN ('pending')`,
         [table_id]
       );
 
@@ -67,10 +69,8 @@ const updateTableStatus = async (req, res) => {
 
     await pool.query('COMMIT');
 
-    if (global.websocket) {
-      global.websocket.updateStatusTable('updateTableStatus', JSON.stringify({ tableId: Number(table_id), status }));
-    }
-
+    if (global.websocket) global.websocket.updateStatusTable('updateTableStatus', JSON.stringify({ tableId: Number(table_id), status }));
+  
     res.json({ message: "Estado de la mesa actualizado y pedidos limpiados." });
   } catch (error) {
     await pool.query('ROLLBACK');
@@ -228,11 +228,22 @@ const updateOrderItem = async (req, res) => {
       }
 
       const remainingOrders = await pool.query(
-        `SELECT id FROM orders WHERE table_id = $1 AND status IN ('pending', 'in preparation')`,
+        `SELECT id FROM orders WHERE table_id = $1 AND status IN ('pending')`,
         [tableId]
       );
       
-      if (remainingOrders.rowCount === 0 && global.websocket) global.websocket.updateStatusTable('updateTableStatus', JSON.stringify({ tableId, status: 'available' }));
+      if (remainingOrders.rowCount === 0) {
+        await pool.query(
+          `UPDATE tables 
+           SET status = 'available', 
+               session_token = NULL, 
+               session_expires_at = NULL 
+           WHERE id = $1 AND restaurant_id = $2`,
+          [tableId, restaurantId]
+        );
+        res.clearCookie('valid', { path: '/' });
+        if (global.websocket) global.websocket.updateStatusTable('updateTableStatus',JSON.stringify({ tableId, status: 'available' }));
+      }
 
       return res.json({ success: true, message: "Pedido actualizado correctamente." });
     } catch (error) {
@@ -242,4 +253,66 @@ const updateOrderItem = async (req, res) => {
     }
   };
 
-module.exports = {deleteWaiter, registerWaiter, getWaiters, updateTableStatus, getTables, updateOrderItem };
+const generateTableSessionToken = async (req, res) => {
+    const { restaurantId, tableId } = req.body;
+  
+    if (!restaurantId || !tableId) {
+      return res.status(400).json({ error: 'Faltan parámetros' });
+    }
+  
+    try {
+      const token = generateSessionToken(restaurantId, tableId);
+      const expiration = new Date(Date.now() + 200 * 60000); 
+  
+      await pool.query(
+        `UPDATE tables 
+         SET session_token = $1, session_expires_at = $2
+         WHERE restaurant_id = $3 AND id = $4`,
+        [token, expiration, restaurantId, tableId]
+      );
+  
+      return res.status(200).json({ success: true, token });
+    } catch (err) {
+      console.error('❌ Error generando session token:', err);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
+};
+
+function generateSessionToken(restaurantId, tableId) {
+  const secret = process.env.SESSION_SECRET; 
+  const data = `${restaurantId}-${tableId}-${Date.now()}`;
+  const token = crypto.createHmac('sha256', secret).update(data).digest('hex');
+  return token;
+}
+
+const clearTableSessionToken = async (req, res) => {
+  const rawTableId = req.body.tableId;
+
+  const tableId = Number(rawTableId);
+  if (!tableId || isNaN(tableId)) {
+    return res.status(400).json({ error: 'tableId inválido' });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE tables
+       SET session_token = NULL, session_expires_at = NULL
+       WHERE id = $1`,
+      [tableId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Mesa no encontrada o ya está limpia' });
+    }
+
+    res.clearCookie('valid', { path: '/' });
+
+    return res.status(200).json({ success: true, message: 'Token de sesión eliminado correctamente y cookie borrada' });
+  } catch (err) {
+    console.error('❌ Error al limpiar token de sesión:', err);
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+
+module.exports = {deleteWaiter, registerWaiter, getWaiters, updateTableStatus, getTables, updateOrderItem, generateTableSessionToken, clearTableSessionToken };

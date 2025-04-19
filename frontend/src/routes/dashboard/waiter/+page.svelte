@@ -5,6 +5,7 @@
   import { connectWebSocket, newOrders, tableStatuses } from '$lib/storeWebSocket';
   import { page } from "$app/stores";
   import type { Table } from "$lib/types";
+  import { generateSessionTokenTable, clearSessionTokenTable } from '$lib/waiter';
     
   let restaurantId = Number($page.data.restaurantId);
   let tables: Table[] = [];
@@ -22,6 +23,12 @@
     if (!restaurantId) return;
     try {
       tables = await fetchTables(restaurantId);
+      tableStatuses.set(
+       tables.reduce((acc, t) => {
+         acc[t.id] = t.status;
+         return acc;
+       }, {} as Record<number, string>)
+     );
     } catch (error) {
       console.error("❌ Error al cargar mesas:", error);
     }
@@ -146,10 +153,25 @@
     confirmRemoval = {};
     removalErrors = {};
   }
+
+  async function handleActivateTable() {
+    if (!selectedTableId) return;
+    await changeTableStatus(selectedTableId, 'occupied');
+    await generateSessionTokenTable(String(restaurantId), String(selectedTableId));
+  }
+
+  async function handleResetTable() {
+    if (!selectedTableId) return;
+    await clearSessionTokenTable(selectedTableId);
+    sessionStorage.removeItem("session_token");
+    await changeTableStatus(selectedTableId, 'available');
+    closeOrderDetails();
+}
     
   onMount(() => {
-    connectWebSocket(); 
-    loadTables();
+    loadTables()
+      .then(() => { connectWebSocket();})
+      .catch(console.error);
   });
 </script>
 
@@ -184,48 +206,51 @@
       <p class="info">Cargando pedidos...</p>
     {:else if errorBill}
       <p class="error">{errorBill}</p>
-    {:else if bill}
-      <ul>
-        {#each bill.items as item, index}
-          <li>{item.quantity}x {item.name} - ${item.subtotal.toFixed(2)}
-            {#if editing}
-              <div class="modify-controls">
-                <input type="text" readonly bind:value={removals[index]} placeholder="cantidad" class={removals[index] === 'cantidad' ? 'default' : ''} on:focus={(e) => { 
-                  const target = e.target as HTMLInputElement; 
-                  target.removeAttribute('readonly'); 
-                  if(target.value === 'cantidad') { 
-                    target.value = ''; 
-                    removals[index] = ''; 
-                  } 
-                }} />
-                <button on:click={() => initiateRemoval(index)}>Eliminar</button>
-              </div>
-              {#if confirmRemoval[index]}
-                <div class="confirm-removal">
-                  ¿Confirmar eliminar {removals[index]} de {item.name}?
-                  <button on:click={() => confirmRemovalFunc(index)}>Confirmar</button>
-                  <button on:click={() => cancelRemoval(index)}>Cancelar</button>
-                  {#if removalErrors[index]}
-                    <p class="error">{removalErrors[index]}</p>
+      {:else if bill}
+        {#if ($tableStatuses[selectedTableId] ?? tables.find(t => t.id === selectedTableId)?.status) === 'available'}
+          <p class="info">Para ver los detalles de la mesa es necesario activarla.</p>
+          <button class="modify-order-btn" on:click={handleActivateTable}>Activar mesa</button>
+        {:else}
+          <ul>
+            {#each bill.items as item, index}
+              <li>{item.quantity}x {item.name} - ${item.subtotal.toFixed(2)}
+                {#if editing}
+                  <div class="modify-controls">
+                    <input type="text" readonly bind:value={removals[index]} placeholder="cantidad" class={removals[index] === 'cantidad' ? 'default' : ''} on:focus={(e) => { 
+                      const target = e.target as HTMLInputElement; 
+                      target.removeAttribute('readonly'); 
+                      if(target.value === 'cantidad') { 
+                        target.value = ''; 
+                        removals[index] = ''; 
+                      } 
+                    }} />
+                    <button on:click={() => initiateRemoval(index)}>Eliminar</button>
+                  </div>
+                  {#if confirmRemoval[index]}
+                    <div class="confirm-removal">
+                      ¿Confirmar eliminar {removals[index]} de {item.name}?
+                      <button on:click={() => confirmRemovalFunc(index)}>Confirmar</button>
+                      <button on:click={() => cancelRemoval(index)}>Cancelar</button>
+                      {#if removalErrors[index]}
+                        <p class="error">{removalErrors[index]}</p>
+                      {/if}
+                    </div>
                   {/if}
-                </div>
-              {/if}
-            {/if}
-          </li>
-        {/each}
-      </ul>
-      <h3>Total: ${bill.total_price.toFixed(2)}</h3>
-      {#if ($tableStatuses[selectedTableId] ?? tables.find(t => t.id === selectedTableId)?.status) === 'paid'}
-        <button class="reset-btn" on:click={() => selectedTableId !== null && changeTableStatus(selectedTableId, 'available')}>
-          Confirmar mesa (resetear)
-        </button>
-      {/if}
-      {#if !editing}
-        <button class="modify-order-btn" on:click={startEditing}>Modificar pedido</button>
-      {:else}
-        <button class="cancel-edit-btn" on:click={stopEditing}>Salir de edición</button>
-      {/if}
-    {/if}
+                {/if}
+              </li>
+            {/each}
+          </ul>
+          <h3>Total: ${bill.total_price.toFixed(2)}</h3>
+          {#if ($tableStatuses[selectedTableId] ?? tables.find(t => t.id === selectedTableId)?.status) === 'paid'}
+            <button class="reset-btn" on:click={handleResetTable}>Confirmar mesa (resetear)</button>
+          {/if}
+          {#if !editing}
+            <button class="modify-order-btn" on:click={startEditing}>Modificar pedido</button>
+          {:else}
+            <button class="cancel-edit-btn" on:click={stopEditing}>Salir de edición</button>
+          {/if}
+        {/if}
+    {/if}    
   </div>
 {/if}
 

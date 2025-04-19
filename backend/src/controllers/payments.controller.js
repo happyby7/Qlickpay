@@ -15,7 +15,7 @@ const StripeCheckoutSession = async (req, res) => {
             product_data: {
               name: 'Cuenta QlickPay',
             },
-            unit_amount: Math.round(amount * 100), // en céntimos
+            unit_amount: Math.round(amount * 100), 
           },
           quantity: 1,
         },
