@@ -3,9 +3,10 @@
     import { page } from "$app/stores";
     import { fetchBill } from "$lib/qr";
     import { goto } from "$app/navigation";
-    import type { ModeState } from "$lib/types";
+    import type { ModeState, Bill } from "$lib/types";
+    import { createCheckoutSession } from '$lib/payment';
   
-    let bill: { items: { quantity: number, name: string, subtotal: number }[], total_price: number } | null = null;
+    let bill: Bill | null = null;
     let loading = true;
     let error = "";
     let restaurantId: string | null = null;
@@ -60,17 +61,14 @@
   
     function increaseQuantity(i: number) {
       if (!bill) return;
-      const available = bill.items[i].quantity - (selectedQuantities[i] || 0);
-      const unitPrice = bill.items[i].quantity ? bill.items[i].subtotal / bill.items[i].quantity : 0;
-      if (available > 0 && remainingTotal >= unitPrice) {
-        selectedQuantities[i] += 1;
-      }
+      const item = bill.items[i];
+      const unitPrice = item.quantity ? item.subtotal / item.quantity : 0;
+      const newTotal = totalSelected + unitPrice;
+      if ((selectedQuantities[i] || 0) < item.quantity && newTotal <= bill.total_price) selectedQuantities[i] += 1; 
     }
   
     function decreaseQuantity(i: number) {
-      if ((selectedQuantities[i] || 0) > 0) {
-        selectedQuantities[i] -= 1;
-      }
+      if ((selectedQuantities[i] || 0) > 0) selectedQuantities[i] -= 1;
     }
   
     function onCustomAmountChange(e: Event) {
@@ -90,6 +88,29 @@
         customAmount = value;
       }
     }
+
+    async function confirmPayment() {
+      if (!restaurantId || !tableId) return;
+      const amount = mode === 'split-items' ? totalSelected : customAmount;
+      if (amount <= 0) return;
+
+      const suffix = mode === 'split-items' ? '-split' : mode === 'custom' ? '-custom' : '';
+      const orderId = `${restaurantId}-${tableId}${suffix}`;
+
+      const metadata: Record<string, string> = { order_id: orderId };
+      
+      if (mode === 'split-items') {
+        const itemsToPay = bill!.items
+          .map((it, i) => ({ name: it.name, quantity: selectedQuantities[i] }))
+          .filter(x => x.quantity > 0);
+        metadata.items = JSON.stringify(itemsToPay);
+      } else if (mode === 'custom') {
+        metadata.custom_amount = customAmount.toString();
+      }
+
+      const { url } = await createCheckoutSession(orderId, amount, metadata);
+      window.location.href = url;
+    }
   
     function goToOrder() {
       let storedRestaurantId = restaurantId || sessionStorage.getItem("restaurantId") || "";
@@ -105,73 +126,87 @@
       });
       loadBillData();
     });
-  </script>
-  
-  {#if restaurantId && tableId}
-    <h1>{ mode === 'custom' ? 'Pagar una cantidad personalizada' : 'Paga por tus articulos' }</h1>
-    {#if loading}
-      <p class="info">Cargando cuenta...</p>
-    {:else if error}
-      <p class="error">{error}</p>
-    {:else if bill}
-      <ul>
-        {#each bill.items as item, i}
-          <li class={mode}>
-            <div class="item-info">
-                <strong>{item.name} {mode === 'custom' ? `x ${item.quantity}` : ''}</strong>
-              <span class="unit-price">EUR {item.quantity ? (item.subtotal / item.quantity).toFixed(2) : "0.00"}</span>
-            </div>
-            {#if mode === 'split-items'}
-              <div class="item-controls">
-                <div class="item-quantity">
-                  <button on:click={() => decreaseQuantity(i)} disabled={(selectedQuantities[i] || 0) <= 0}>-</button>
-                  <span class="quantity-num">{selectedQuantities[i] || 0}</span>
-                  <button on:click={() => increaseQuantity(i)} disabled={(bill.items[i].quantity - (selectedQuantities[i] || 0)) <= 0 || remainingTotal < (item.quantity ? item.subtotal / item.quantity : 0)}>+</button>
-                </div>
-                <div class="item-total">
-                  <span>EUR {((item.quantity ? (item.subtotal / item.quantity) : 0) * (selectedQuantities[i] || 0)).toFixed(2)}</span>
-                </div>
+  </script>{#if restaurantId && tableId}
+  <h1>{ mode === 'custom' ? 'Pagar una cantidad personalizada' : 'Paga por tus articulos' }</h1>
+  {#if loading}
+    <p class="info">Cargando cuenta...</p>
+  {:else if error}
+    <p class="error">{error}</p>
+  {:else if bill}
+    <ul>
+      {#each bill.items as item, i}
+        <li class={mode}>
+          <div class="item-info">
+            <strong>{item.name} {mode === 'custom' ? `x ${item.quantity}` : ''}</strong>
+            <span class="unit-price">EUR {item.quantity ? (item.subtotal / item.quantity).toFixed(2) : "0.00"}</span>
+          </div>
+          {#if mode === 'split-items'}
+            <div class="item-controls">
+              <div class="item-quantity">
+                <button
+                  on:click={() => decreaseQuantity(i)}
+                  disabled={(selectedQuantities[i] || 0) <= 0}
+                >-</button>
+                <span class="quantity-num">{selectedQuantities[i] || 0}</span>
+                <button
+                  on:click={() => increaseQuantity(i)}
+                  disabled={(selectedQuantities[i] || 0) >= item.quantity}
+                >+</button>
               </div>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-      <div class="summary">
-        <div class="line">
-          <span>Total de la cuenta</span>
-          <span>EUR {bill.total_price.toFixed(2)}</span>
+              <div class="item-total">
+                <span>EUR {((item.quantity ? (item.subtotal / item.quantity) : 0) * (selectedQuantities[i] || 0)).toFixed(2)}</span>
+              </div>
+            </div>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+    <div class="summary">
+      <div class="line">
+        <span>Total de la cuenta</span>
+        <span>EUR {bill.total_price.toFixed(2)}</span>
+      </div>
+      {#if mode === 'split-items'}
+        <div class="line highlight">
+          <span>Tu parte a pagar</span>
+          <span>EUR {totalSelected.toFixed(2)}</span>
         </div>
-        {#if mode === 'split-items'}
-          <div class="line highlight">
-            <span>Tu parte a pagar</span>
-            <span>EUR {totalSelected.toFixed(2)}</span>
-          </div>
-        {:else if mode === 'custom'}
-          <div class="custom-input">
-            <label for="customAmount">Ingresa tu cantidad a pagar</label>
-            <input id="customAmount" type="number" min="0" max={bill.total_price} value={customAmount} on:input={onCustomAmountChange} />
-            {#if customError}
-              <p class="error">{customError}</p>
-            {/if}
-          </div>
-          <div class="line highlight">
-            <span>Tu parte a pagar</span>
-            <span>EUR {customAmount.toFixed(2)}</span>
-          </div>
-          <div class="line">
-            <span>Restante</span>
-            <span>EUR {remainingTotal.toFixed(2)}</span>
-          </div>
-        {/if}
-      </div>
-      <div class="actions">
-        <button class="remove-btn" on:click={goToOrder}>Eliminar división</button>
-        <button class="confirm-btn">{mode === 'split-items' ? 'Confirmar división' : 'Confirmar cantidad'}</button>
-      </div>
-    {/if}
-  {:else}
-    <p class="error">No se ha identificado la mesa.</p>
+      {:else if mode === 'custom'}
+        <div class="custom-input">
+          <label for="customAmount">Ingresa tu cantidad a pagar</label>
+          <input
+            id="customAmount"
+            type="number"
+            min="0"
+            max={bill.total_price}
+            value={customAmount}
+            on:input={onCustomAmountChange}
+          />
+          {#if customError}
+            <p class="error">{customError}</p>
+          {/if}
+        </div>
+        <div class="line highlight">
+          <span>Tu parte a pagar</span>
+          <span>EUR {customAmount.toFixed(2)}</span>
+        </div>
+        <div class="line">
+          <span>Restante</span>
+          <span>EUR {remainingTotal.toFixed(2)}</span>
+        </div>
+      {/if}
+    </div>
+    <div class="actions">
+      <button class="remove-btn" on:click={goToOrder}>Eliminar división</button>
+      <button class="confirm-btn" on:click={confirmPayment}>
+        {mode === 'split-items' ? 'Confirmar división' : 'Confirmar cantidad'}
+      </button>
+    </div>
   {/if}
+{:else}
+  <p class="error">No se ha identificado la mesa.</p>
+{/if}
+
   
   <style>
     :global(body) {

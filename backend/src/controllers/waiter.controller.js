@@ -285,15 +285,17 @@ function generateSessionToken(restaurantId, tableId) {
   return token;
 }
 
-const clearTableSessionToken = async (req, res) => {
+const clearTable = async (req, res) => {
   const rawTableId = req.body.tableId;
+  const rawRestauranteId = req.body.restaurantId;
 
   const tableId = Number(rawTableId);
-  if (!tableId || isNaN(tableId)) {
-    return res.status(400).json({ error: 'tableId inválido' });
-  }
+  const restaurantId = Number(rawRestauranteId);
 
+  if (!tableId || isNaN(tableId || !restaurantId || isNaN(restaurantId))) return res.status(400).json({ error: 'tableId o restaurantId inválidos' });
+  
   try {
+    // Borrar token de sesión de la mesa
     const result = await pool.query(
       `UPDATE tables
        SET session_token = NULL, session_expires_at = NULL
@@ -301,18 +303,26 @@ const clearTableSessionToken = async (req, res) => {
       [tableId]
     );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Mesa no encontrada o ya está limpia' });
-    }
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Mesa no encontrada o ya está limpia' });
+
+    // Borrar pedidos de la mesa
+    await pool.query(
+      `DELETE FROM orders o
+         USING tables t
+        WHERE o.table_id = t.id
+          AND t.restaurant_id = $1
+          AND t.id          = $2`,
+      [restaurantId, tableId]
+    );
 
     res.clearCookie('valid', { path: '/' });
 
-    return res.status(200).json({ success: true, message: 'Token de sesión eliminado correctamente y cookie borrada' });
+    return res.status(200).json({ success: true, message: 'Token de sesión o cookie y pedidos eliminados correctamente.' });
   } catch (err) {
-    console.error('❌ Error al limpiar token de sesión:', err);
+    console.error('❌ Error al limpiar la mesa:', err);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
 
 
-module.exports = {deleteWaiter, registerWaiter, getWaiters, updateTableStatus, getTables, updateOrderItem, generateTableSessionToken, clearTableSessionToken };
+module.exports = {deleteWaiter, registerWaiter, getWaiters, updateTableStatus, getTables, updateOrderItem, generateTableSessionToken, clearTable };

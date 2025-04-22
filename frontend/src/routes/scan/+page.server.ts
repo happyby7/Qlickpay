@@ -15,8 +15,8 @@ export const load: PageServerLoad = async ({ url, cookies, fetch }) => {
       cookies.set('valid', token, { httpOnly: true,  secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 15 * 60  });
     }
     return { restaurantId, tableId, token: token ?? null };
-  } catch (error) {
-    console.error("Error al obtener token de sesión:", error);
-    return { restaurantId, tableId, token: null, error: "Error al obtener token de sesión." };
+  } catch (err: any) {
+    console.error("Error al obtener token de sesión:", err);
+    return { restaurantId, tableId, token: null, error: err.message || "Error al obtener token de sesión.", };
   }
 };

@@ -3,11 +3,11 @@
   import { page } from "$app/stores";
   import { fetchBill } from "$lib/qr";
   import { goto } from "$app/navigation";
-  import type { ModeState } from "$lib/types";
+  import type { ModeState, Bill } from "$lib/types";
   import { fetchTableStatus } from "$lib/order";
   import { createCheckoutSession } from "$lib/payment";
 
-  let bill: { items: { quantity: number, name: string, subtotal: number }[], total_price: number } | null = null;
+  let bill: Bill | null = null;
   let loading = true;
   let error = "";
   let restaurantId: string | null = null;
@@ -55,8 +55,8 @@
 
   async function pay(amount: number) {
     if (!restaurantId || !tableId || amount <= 0) return;
-    const orderId = `${restaurantId}-${tableId}`;
-    const { url } = await createCheckoutSession(orderId, amount);
+    const orderId = `${restaurantId}-${tableId}-full`;
+    const { url } = await createCheckoutSession(orderId, amount, {});
     window.location.href = url;
   }
 

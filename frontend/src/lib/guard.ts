@@ -48,24 +48,6 @@ export async function checkTableGuard(url: URL, options: GuardOptions = { requir
   }
 }
 
-export async function checkSessionTokenTableGuard(
-  event: RequestEvent,
-  options = { requireParams: true }
-): Promise<void> {
-  const { url, cookies, fetch } = event;
-  const restaurantIdStr = url.searchParams.get('restaurantId');
-  const tableIdStr = url.searchParams.get('tableId');
-
-  if (!restaurantIdStr || !tableIdStr) {
-    if (options.requireParams) {
-      console.error("❌ Faltan parámetros en la URL.");
-      throw redirect(302, '/');
-    }
-    return;
-  }
-  await validateSessionToken(restaurantIdStr, tableIdStr, cookies, fetch);
-}
-
 export async function validateSessionToken( restaurantId: string,tableId: string,cookies: any, fetchFn: typeof fetch): Promise<string> {
   const cookieToken = cookies.get('valid');
   if (!cookieToken) {

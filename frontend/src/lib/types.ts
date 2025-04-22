@@ -34,12 +34,23 @@ export interface TokenPayload {
     restaurantId?: number | null;
 }
 
+export interface BillItem {
+    quantity: number;
+    name: string;
+    subtotal: number;
+}
+  
+export interface Bill {
+    items: BillItem[];
+    total_price: number;
+}
+
 export interface ModeState {
     value: 'none' | 'split-items' | 'custom';
 }
 
 export interface GuardOptions {
     requireParams?: boolean;
-  }
+}
   
 

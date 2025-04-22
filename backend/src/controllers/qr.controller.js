@@ -68,34 +68,33 @@ const generateQR = async (req, res) => {
 
 async function getTableBill(req, res) {
     const { restaurantId, tableId } = req.params;
+    const statusFilter = req.query.status === 'paid' ? 'paid' : 'pending';
 
     try {
-        const { rows } = await pool.query(
-            `SELECT 
-                o.id AS order_id, 
-                o.status, 
-                o.total_price, 
-                json_agg(json_build_object(
-                    'name', m.name, 
-                    'quantity', oi.quantity, 
-                    'subtotal', oi.subtotal
-                )) AS items
-            FROM orders o
-            JOIN order_items oi ON o.id = oi.order_id
-            JOIN menu_items m ON oi.menu_item_id = m.id
-            JOIN tables t ON o.table_id = t.id
-            WHERE t.restaurant_id = $1 
-            AND o.table_id = $2 
-            AND o.status IN ('pending', 'in preparation', 'served') 
-            GROUP BY o.id
-            ORDER BY o.created_at ASC;`, 
-            [restaurantId, tableId]
-        );
+      const { rows } = await pool.query(
+        `SELECT 
+          o.id       AS order_id,
+          o.total_price,
+          json_agg(json_build_object('name', m.name, 'quantity', oi.quantity, 'subtotal', oi.subtotal)) AS items
+        FROM orders o
+        JOIN tables t
+          ON o.table_id = t.id
+        JOIN order_items oi
+          ON oi.order_id = o.id
+        AND oi.status   = $3
+        JOIN menu_items m
+          ON m.id        = oi.menu_item_id
+        WHERE t.restaurant_id = $1
+          AND o.table_id      = $2
+        GROUP BY o.id
+        ORDER BY o.created_at ASC;`,
+        [restaurantId, tableId, statusFilter]
+      );
 
         const mesa = await pool.query("SELECT status FROM tables WHERE id = $1", [tableId]);
         const estadoActual = mesa.rows[0]?.status;
 
-        if (estadoActual === 'available' && rows.length > 0) await pool.query("UPDATE tables SET status = 'occupied' WHERE id = $1", [tableId]);
+        if (statusFilter === 'pending' && estadoActual === 'available' && rows.length > 0) await pool.query("UPDATE tables SET status = 'occupied' WHERE id = $1", [tableId]);
         
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
         res.setHeader("Pragma", "no-cache");

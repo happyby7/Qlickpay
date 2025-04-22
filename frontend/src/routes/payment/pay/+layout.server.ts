@@ -1,8 +1,8 @@
-import type { PageServerLoad } from './$types';
+import type { LayoutServerLoad } from './$types';
 import { validateSessionToken } from '$lib/guard';
 import { redirect } from '@sveltejs/kit';
 
-export const load: PageServerLoad = async ({ url, cookies, fetch }) => {
+export const load: LayoutServerLoad = async ({ url, cookies, fetch }) => {
   const restaurantId = url.searchParams.get('restaurantId') || '';
   const tableId = url.searchParams.get('tableId') || '';
 

@@ -24,7 +24,25 @@ export async function apiFetch( endpoint: string, options: RequestInit & { cooki
   const response = await fetchFn(`${API_URL}${endpoint}`, { credentials: "include",  headers, ...rest,});
 
   if (endpoint === "/api/auth/logout" && response.status === 401) return { success: true };
-  if (!response.ok) throw new Error(`Error en la API: ${response.status} ${response.statusText}`);
+  
+  let payloadText = await response.text();
+  let payload: any;
+  try {
+      payload = JSON.parse(payloadText);
+    } catch {
+      payload = null;
+    }
+  
+    if (!response.ok) {
+      const msg = payload?.error 
+        ? payload.error 
+        : `Error en la API: ${response.status} ${response.statusText}`;
+     throw new Error(msg);
+    }
 
-  return response.json();
+    try {
+      return payload ?? (await JSON.parse(payloadText));
+    } catch {
+       return JSON.parse(payloadText);
+    }
 }

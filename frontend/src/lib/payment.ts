@@ -1,10 +1,10 @@
 import { apiFetch } from "./api";
 
-export async function createCheckoutSession(orderId: string, amount: number): Promise<{ url: string }> {
+export async function createCheckoutSession(orderId: string, amount: number, metadata: Record<string,string>): Promise<{ url: string }> {
     try {
       return await apiFetch('/api/payment/stripe-checkout-session', {
         method: 'POST',
-        body: JSON.stringify({ orderId, amount }),
+        body: JSON.stringify({ orderId, amount, metadata }),
       });
     } catch (error) {
       console.error("Error al crear sesión de pago:", error);

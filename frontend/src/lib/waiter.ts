@@ -60,14 +60,14 @@ export async function generateSessionTokenTable(restaurantId: string, tableId: s
     }
 }
   
-export async function clearSessionTokenTable(tableId: number): Promise<any> {
+export async function clearTable(tableId: number, restaurantId: number): Promise<any> {
     try {
       return await apiFetch(`/api/waiter/clear-session-token-table`, {
         method: 'POST',
-        body: JSON.stringify({ tableId })
+        body: JSON.stringify({ tableId, restaurantId})
       });
     } catch (error) {
-      console.error("Error al limpiar el token de sesión:", error);
+      console.error("Error al limpiar la mesa:", error);
     }
 }
   
