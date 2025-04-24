@@ -16,6 +16,8 @@
   let mode: ModeState['value'] = 'none';
   let showSplit: boolean = false;
 
+  let checkoutError: string = "";
+
   $: ({ restaurantId, tableId } = $page.data);
 
   async function robustCheckStatus() {
@@ -55,9 +57,14 @@
 
   async function pay(amount: number) {
     if (!restaurantId || !tableId || amount <= 0) return;
-    const orderId = `${restaurantId}-${tableId}-full`;
-    const { url } = await createCheckoutSession(orderId, amount, {});
-    window.location.href = url;
+    try {
+      const orderId = `${restaurantId}-${tableId}-full`;
+      const { url } = await createCheckoutSession(orderId, amount, {});
+      window.location.href = url;
+    } catch (err: any) {
+      checkoutError = err.message || "Error al crear sesión de pago.";
+      setTimeout(() => (checkoutError = ""), 4000);
+    }
   }
 
   onMount(() => {
@@ -87,6 +94,9 @@
 </script>
 
 {#if restaurantId && tableId}
+  {#if checkoutError}
+    <p class="error">{checkoutError}</p>
+  {/if}
   <div class="menu-container">
     <h1>Paga tu cuenta</h1>
     {#if loading}
@@ -160,51 +170,42 @@
     background: #fff;
     color: #333;
   }
-
   .menu-container {
     max-width: 600px;
     margin: 2rem auto;
     padding: 1rem;
   }
-
   h1 {
     margin: 0.5rem 0;
     font-size: 1.2rem;
     text-align: center;
   }
-
-  .info,
-  .error {
+  .info {
     text-align: center;
     margin: 0.5rem 0;
   }
-
   .bill-list {
     list-style: none;
     margin: 0;
     padding: 0;
   }
-
   .bill-item {
     padding: 0.8rem 0;
     border-bottom: 1px solid #ccc;
     font-size: 0.95rem;
   }
-
   .total {
     text-align: center;
     margin: 1rem 0;
     font-size: 1rem;
     font-weight: bold;
   }
-
   .main-actions {
     display: flex;
     justify-content: center;
     gap: 1rem;
     margin-top: 2rem;
   }
-
   .fullpay-btn,
   .split-btn {
     padding: 0.7rem 1.5rem;
@@ -214,24 +215,20 @@
     border-radius: 8px;
     cursor: pointer;
   }
-
   .fullpay-btn {
     background-color: #10b981;
     color: white;
   }
-
   .split-btn {
     background-color: #f3e8ff;
     color: #9333ea;
   }
-
   .backdrop {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.4);
     z-index: 9;
   }
-
   .slide-up {
     position: fixed;
     bottom: 0;
@@ -246,17 +243,14 @@
     overflow-x: hidden;
     box-sizing: border-box;
   }
-
   .options h2 {
     margin-bottom: 0.4rem;
   }
-
   .description {
     color: #666;
     font-size: 0.95rem;
     margin-bottom: 1.2rem;
   }
-
   .option-row {
     display: flex;
     justify-content: space-between;
@@ -264,17 +258,14 @@
     padding: 1rem 0;
     border-bottom: 1px solid #eee;
   }
-
   .option-row strong {
     font-size: 1rem;
   }
-
   .subtitle {
     font-size: 0.85rem;
     color: #999;
     margin-top: 0.2rem;
   }
-
   .select-btn {
     background: #f3e8ff;
     color: #9333ea;
@@ -285,8 +276,18 @@
     cursor: pointer;
     transition: background 0.2s ease;
   }
-
   .select-btn:hover {
     background: #e9d5ff;
   }
+  .error {
+    background-color: #fde2e2;
+    color: #b91c1c;
+    padding: 0.75rem 1rem;
+    border: 1px solid #f5c2c7;
+    border-radius: 0.375rem;
+    margin: 0.5rem auto 1rem;      
+    max-width: 400px;              
+    text-align: center;
+  }
+  
 </style>

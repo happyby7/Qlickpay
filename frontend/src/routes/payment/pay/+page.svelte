@@ -7,8 +7,11 @@
     import { createCheckoutSession } from '$lib/payment';
   
     let bill: Bill | null = null;
+
     let loading = true;
+    let checkoutError: string = "";
     let error = "";
+
     let restaurantId: string | null = null;
     let tableId: string | null = null;
   
@@ -108,8 +111,13 @@
         metadata.custom_amount = customAmount.toString();
       }
 
-      const { url } = await createCheckoutSession(orderId, amount, metadata);
-      window.location.href = url;
+      try {
+        const { url } = await createCheckoutSession(orderId, amount, metadata);
+        window.location.href = url;
+      } catch (err: any) {
+        checkoutError = err.message || "Error al crear sesión de pago.";
+        setTimeout(() => (checkoutError = ""), 4000);
+      }
     }
   
     function goToOrder() {
@@ -126,7 +134,13 @@
       });
       loadBillData();
     });
-  </script>{#if restaurantId && tableId}
+  </script>
+  
+  {#if restaurantId && tableId}
+  {#if checkoutError}                               
+    <p class="error">{checkoutError}</p>             
+  {/if}
+
   <h1>{ mode === 'custom' ? 'Pagar una cantidad personalizada' : 'Paga por tus articulos' }</h1>
   {#if loading}
     <p class="info">Cargando cuenta...</p>
@@ -221,7 +235,7 @@
       text-align: center;
       color: #333;
     }
-    .info, .error {
+    .info {
       text-align: center;
       margin: 0.8rem;
       color: #666;
@@ -234,7 +248,7 @@
       border-radius: 10px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     }
-    /* Para ambos modos, mostramos el nombre y el precio unitario de forma compacta */
+
     li {
       padding: 0.6rem;
       border-bottom: 1px solid #eee;
@@ -255,7 +269,7 @@
       font-size: 0.85rem;
       color: #777;
     }
-    /* Estilos para el modo split-items: controles y total en una misma línea */
+    
     li.split-items {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -350,5 +364,16 @@
       background: #007bff;
       color: #fff;
     }
+    .error {
+      background-color: #fde2e2;
+      color: #b91c1c;
+      padding: 0.75rem 1rem;
+      border: 1px solid #f5c2c7;
+      border-radius: 0.375rem;
+      margin: 0.5rem auto 1rem;      
+      max-width: 400px;              
+      text-align: center;
+    }
+
   </style>
   

@@ -18,7 +18,7 @@
   <p style="color: red;">{error}</p>
 {:else if !token}
   <p style="color: red;">
-    Esta mesa no ha sido activada o el QR no es válido. Por favor, no dude en contactar con un trabajador.
+    Esta mesa no ha sido activada o tiene que volver a escanear el QR de la mesa. Por favor, no dude en contactar con un trabajador.
   </p>
 {:else}
   <p>Redirigiendo...</p>

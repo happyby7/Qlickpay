@@ -292,7 +292,7 @@
 
         <!-- Botones finales -->
         {#if ($tableStatuses[selectedTableId] ?? tables.find(t => t.id === selectedTableId)?.status) !== 'paid'}
-          {#if bill.items.length === 0 && (!paidBill || paidBill.items.length === 0)}
+          {#if bill.items.length === 0 || (!paidBill || paidBill.items.length === 0)}
             {#if !confirmDeactivate}
               <button class="deactivate-btn" on:click={() => confirmDeactivate = true}>Desactivar mesa</button>
             {:else}

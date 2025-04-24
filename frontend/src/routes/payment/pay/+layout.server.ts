@@ -6,6 +6,11 @@ export const load: LayoutServerLoad = async ({ url, cookies, fetch }) => {
   const restaurantId = url.searchParams.get('restaurantId') || '';
   const tableId = url.searchParams.get('tableId') || '';
 
+  if (!restaurantId || !tableId) {
+    console.error('🚨 Parámetros faltantes en los datos del servidor.');
+    return { restaurantId: null, tableId: null };
+  }
+
   if (restaurantId && tableId) {
     try {
       await validateSessionToken(restaurantId, tableId, cookies, fetch);

@@ -2,68 +2,102 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+const activeCheckouts = new Set();
+const checkoutTimeouts = new Map();
+
 const StripeCheckoutSession = async (req, res) => {
-  const { amount, orderId, metadata  } = req.body;
+  const { amount, orderId, metadata } = req.body;
+  const [, tableIdStr] = orderId.split("-");
+  const tableId = parseInt(tableIdStr, 10);
 
+  if (activeCheckouts.has(tableId)) return res.status(409).json({ error: 'Ya hay un pago en curso para esta mesa. Por favor, espere y recargue la página.' });
+     
+  let session;
   try {
-    const session = await stripe.checkout.sessions.create({
+    session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      line_items: [
-        {
-          price_data: {
-            currency: 'eur',
-            product_data: {
-              name: 'Cuenta QlickPay',
-            },
-            unit_amount: Math.round(amount * 100), 
-          },
-          quantity: 1,
+      line_items: [{
+        price_data: {
+          currency: 'eur',
+          product_data: { name: 'Cuenta QlickPay' },
+          unit_amount: Math.round(amount * 100),
         },
-      ],
-      metadata: {
-        order_id: orderId,
-        ...metadata
-      },
-      success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`, 
-      cancel_url: `${process.env.FRONTEND_URL}/payment/cancel?orderId=${orderId}`,
+        quantity: 1,
+      }],
+        metadata: { order_id: orderId, ...metadata },
+        success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel-checkout?orderId=${orderId}`,
     });
-
+    
+    activeCheckouts.add(tableId);
+    const timeout = setTimeout(() => {
+      releaseCheckoutLock(tableId);
+      stripe.checkout.sessions.expire(session.id).catch(() => {});
+    }, 5 * 60 * 1000);
+    
+    checkoutTimeouts.set(tableId, timeout);
+    
     res.json({ url: session.url });
   } catch (err) {
     console.error('❌ Error al crear sesión de pago:', err);
     res.status(500).json({ error: 'No se pudo crear la sesión de pago.' });
+   }
+};
+
+function releaseCheckoutLock(tableId) {
+  const to = checkoutTimeouts.get(tableId);
+  if (to) {
+    clearTimeout(to);
+    checkoutTimeouts.delete(tableId);
   }
+  activeCheckouts.delete(tableId);
+}
+
+const cancelCheckoutSession = (req, res) => {
+  const { orderId } = req.query;
+  const [, tableIdStr] = (orderId || "").split("-");
+  const tableId = parseInt(tableIdStr, 10);
+
+  releaseCheckoutLock(tableId);
+
+  return res.redirect(`${process.env.FRONTEND_URL}/payment/cancel?orderId=${orderId}`);
 };
 
 const StripeConfirmSuccess = async (req, res) => {
   const sessionId = req.query.session_id;
-  if (!sessionId) return res.status(400).json({ error: 'Falta el session_id en la query.' });
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Falta el session_id en la query.' });
+  }
 
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    const [ , tableIdStr, mode ] = (session.metadata.order_id||"").split("-");;
-    const tableId = parseInt(tableIdStr);
-    
+    const [, tableIdStr, mode] = session.metadata.order_id.split("-");
+    const tableId = parseInt(tableIdStr, 10);
+
     if (mode === "split") {
       const items = JSON.parse(session.metadata.items);
-
       for (const { name, quantity } of items) {
         await payItemsByName(tableId, name, Number(quantity));
       }
-
-    } else if( mode === "custom") {
+    } else if (mode === "custom") {
       const amount = Number(session.metadata.custom_amount);
-      //await payCustomAmount(tableId, amount);
-    }else {
+      // await payCustomAmount(tableId, amount);
+    } else {
       await payAll(tableId);
     }
-    
+
     res.json({ success: true });
   } catch (err) {
     console.error('❌ Error confirmando pago:', err);
     res.status(500).json({ error: 'Error al confirmar el pago' });
+  } finally {
+    const [, tableIdStr] = (req.query.orderId || "").split("-");
+    const tableId = parseInt(tableIdStr, 10);
+
+    releaseCheckoutLock(tableId);
   }
 };
+
 async function payItemsByName(tableId, itemName, quantityToPay) {
   const client = await pool.connect();
   try {
@@ -150,8 +184,6 @@ async function payItemsByName(tableId, itemName, quantityToPay) {
   }
 }
 
-
-
 async function payAll(tableId) {
   const client = await pool.connect();
   try {
@@ -194,5 +226,4 @@ async function payAll(tableId) {
   }
 }
 
-
-module.exports = { StripeCheckoutSession, StripeConfirmSuccess};
+module.exports = { StripeCheckoutSession, StripeConfirmSuccess, cancelCheckoutSession};
