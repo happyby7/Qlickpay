@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/stores";
-  import { fetchBill } from "$lib/qr";
+  import { fetchBill, fetchBillPaid  } from "$lib/qr";
   import { goto } from "$app/navigation";
   import type { ModeState, Bill } from "$lib/types";
   import { fetchTableStatus } from "$lib/order";
   import { createCheckoutSession } from "$lib/payment";
 
   let bill: Bill | null = null;
+  let paidBill: Bill | null = null;
   let loading = true;
   let error = "";
   let restaurantId: string | null = null;
@@ -19,6 +20,8 @@
   let checkoutError: string = "";
 
   $: ({ restaurantId, tableId } = $page.data);
+  $: pendingTotal = bill ? bill.items.reduce((sum, it) => sum + it.subtotal, 0) : 0;
+  $: paidTotal = paidBill ? paidBill.items.reduce((sum, it) => sum + it.subtotal, 0) : 0;
 
   async function robustCheckStatus() {
     if (!restaurantId || !tableId) return;
@@ -43,7 +46,7 @@
     loading = true;
     error = "";
     try {
-      bill = await fetchBill(restaurantId, tableId);
+      [bill, paidBill] = await Promise.all([fetchBill(restaurantId, tableId), fetchBillPaid(restaurantId, tableId)]);
       if (!bill) {
         error = "No se pudo cargar la cuenta. Inténtalo de nuevo.";
       }
@@ -92,7 +95,6 @@
     goto(`/payment/pay?mode=custom&restaurantId=${storedRestaurantId}&tableId=${storedTableId}`);
   }
 </script>
-
 {#if restaurantId && tableId}
   {#if checkoutError}
     <p class="error">{checkoutError}</p>
@@ -104,14 +106,41 @@
     {:else if error}
       <p class="error">{error}</p>
     {:else if bill}
-      <ul class="bill-list">
-        {#each bill.items as item}
-          <li class="bill-item">
-            {item.quantity}x {item.name} - {item.subtotal.toFixed(2)} <small>EUR</small>
-          </li>
-        {/each}
-      </ul>
-      <h2 class="total">Total: {bill.total_price.toFixed(2)} <small>EUR</small></h2>
+      <h3>Pedidos pendientes</h3>
+      {#if bill.items.length > 0}
+        <ul class="bill-list pending">
+          {#each bill.items as item}
+            <li class="bill-item pending">
+              {item.quantity}x {item.name} — {item.subtotal.toFixed(2)} <small>EUR</small>
+            </li>
+          {/each}
+        </ul>
+        <p class="sub-total pending">
+          Total pendiente: {pendingTotal.toFixed(2)} <small>EUR</small>
+        </p>
+      {:else}
+        <p class="info">No hay pedidos pendientes.</p>
+      {/if}
+
+      <h3>Pedidos pagados</h3>
+      {#if paidBill && paidBill.items.length > 0}
+        <ul class="bill-list paid">
+          {#each paidBill.items as item}
+            <li class="bill-item paid">
+              {item.quantity}x {item.name} — {item.subtotal.toFixed(2)} <small>EUR</small>
+            </li>
+          {/each}
+        </ul>
+        <p class="sub-total paid">
+          Total pagado: {paidTotal.toFixed(2)} <small>EUR</small>
+        </p>
+      {:else}
+        <p class="info">No hay pedidos pagados.</p>
+      {/if}
+
+      <h2 class="grand-total">
+        Total mesa: {bill.total_price.toFixed(2)} <small>EUR</small>
+      </h2>
     {/if}
   </div>
 {:else}
@@ -120,12 +149,8 @@
 
 {#if mode === 'none'}
   <div class="main-actions">
-    <button class="fullpay-btn" on:click={() => bill && pay(bill.total_price)}>
-      Pagar todo
-    </button>
-    <button class="split-btn" on:click={() => showSplit = true}>
-      Dividir la cuenta
-    </button>
+    <button class="fullpay-btn" on:click={() => bill && pay(pendingTotal)}>Pagar todo</button>
+    <button class="split-btn" on:click={() => showSplit = true}>Dividir la cuenta</button>
   </div>
 {/if}
 
@@ -146,18 +171,14 @@
         <strong>Pagar por tus artículos</strong>
         <p class="subtitle">Selecciona solo lo que has pedido</p>
       </div>
-      <button on:click={goToSplitItems} class="select-btn">
-        seleccionar
-      </button>
+      <button on:click={goToSplitItems} class="select-btn">seleccionar</button>
     </div>
     <div class="option-row">
       <div>
         <strong>Pagar una cantidad personalizada</strong>
         <p class="subtitle">Introduce la cantidad que deseas pagar</p>
       </div>
-      <button on:click={goToCustomAmount} class="select-btn">
-        seleccionar
-      </button>
+      <button on:click={goToCustomAmount} class="select-btn">seleccionar</button>
     </div>
   </div>
 {/if}
@@ -194,11 +215,19 @@
     border-bottom: 1px solid #ccc;
     font-size: 0.95rem;
   }
-  .total {
+  .bill-list.pending { background: #fffbeb; padding: 0.5rem; border-radius: 8px; }
+  .bill-item.pending,
+  .sub-total.pending { color: #92400e; }
+
+  .bill-list.paid { background: #ecfdf5; padding: 0.5rem; border-radius: 8px; margin-top: 1rem; }
+  .bill-item.paid,
+  .sub-total.paid { color: #065f46; }
+
+  .grand-total {
     text-align: center;
-    margin: 1rem 0;
-    font-size: 1rem;
-    font-weight: bold;
+    color: #1e3a8a;
+    font-size: 1.4rem;
+    margin-top: 1.5rem;
   }
   .main-actions {
     display: flex;

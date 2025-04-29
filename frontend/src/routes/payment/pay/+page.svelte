@@ -1,12 +1,13 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { page } from "$app/stores";
-    import { fetchBill } from "$lib/qr";
+    import { fetchBill, fetchBillPaid } from "$lib/qr";
     import { goto } from "$app/navigation";
     import type { ModeState, Bill } from "$lib/types";
     import { createCheckoutSession } from '$lib/payment';
   
     let bill: Bill | null = null;
+    let paidBill: Bill | null = null;
 
     let loading = true;
     let checkoutError: string = "";
@@ -16,24 +17,29 @@
     let tableId: string | null = null;
   
     let mode: ModeState['value'] = 'split-items';
-    $: mode = (['split-items', 'custom'].includes($page.url.searchParams.get('mode') ?? '')) 
-        ? ($page.url.searchParams.get('mode') as 'split-items' | 'custom') 
-        : 'split-items';
-  
+    
     let selectedQuantities: number[] = [];
     let customAmount: number = 0;
     let customError: string = "";
   
     $: ({ restaurantId, tableId } = $page.data);
+    $: pendingTotal = bill ? bill.items.reduce((sum, it) => sum + it.subtotal, 0) : 0;
+    $: paidTotal = paidBill? paidBill.items.reduce((sum, it) => sum + it.subtotal, 0) : 0;
+
     $: totalSelected = (mode === 'split-items' && bill)
         ? bill.items.reduce((acc, item, i) => {
             const unitPrice = item.quantity ? item.subtotal / item.quantity : 0;
             return acc + (selectedQuantities[i] || 0) * unitPrice;
           }, 0)
         : 0;
+
     $: remainingTotal = bill 
         ? Math.max(bill.total_price - (mode === 'split-items' ? totalSelected : customAmount), 0)
         : 0;
+
+    $: mode = (['split-items', 'custom'].includes($page.url.searchParams.get('mode') ?? '')) 
+        ? ($page.url.searchParams.get('mode') as 'split-items' | 'custom') 
+        : 'split-items';
   
     async function loadBillData() {
       if (!restaurantId || !tableId) {
@@ -44,7 +50,7 @@
       loading = true;
       error = "";
       try {
-        bill = await fetchBill(restaurantId, tableId);
+        [bill, paidBill] = await Promise.all([fetchBill(restaurantId, tableId),fetchBillPaid(restaurantId, tableId)]);
         if (bill) {
           if (mode === 'split-items') {
             selectedQuantities = bill.items.map(() => 0);
@@ -61,13 +67,17 @@
         loading = false;
       }
     }
+
+    function getMaxSelectable(itemQty: number): number {
+      return Math.floor(itemQty);
+    }
   
     function increaseQuantity(i: number) {
-      if (!bill) return;
-      const item = bill.items[i];
+      const item = bill!.items[i];
       const unitPrice = item.quantity ? item.subtotal / item.quantity : 0;
-      const newTotal = totalSelected + unitPrice;
-      if ((selectedQuantities[i] || 0) < item.quantity && newTotal <= bill.total_price) selectedQuantities[i] += 1; 
+      const maxQty = getMaxSelectable(item.quantity);
+
+      if ((selectedQuantities[i] || 0) < maxQty && totalSelected + unitPrice <= pendingTotal) selectedQuantities[i] += 1;
     }
   
     function decreaseQuantity(i: number) {
@@ -75,17 +85,16 @@
     }
   
     function onCustomAmountChange(e: Event) {
-      const target = e.target as HTMLInputElement;
-      const value = Number(target.value);
+      const value = Number((e.target as HTMLInputElement).value);
       if (isNaN(value)) {
         customError = "Ingrese un número válido.";
         customAmount = 0;
-      } else if (value < 0) {
-        customError = "La cantidad no puede ser negativa.";
+      } else if (value < 0.50) {
+        customError = "La cantidad mínima es 0.50€.";
         customAmount = 0;
-      } else if (bill && value > bill.total_price) {
-        customError = "La cantidad no puede ser mayor al total.";
-        customAmount = bill.total_price;
+      } else if (bill && value > pendingTotal) {
+        customError = "La cantidad no puede ser mayor a la pendiente por pagar.";
+        customAmount = parseFloat(pendingTotal.toFixed(2));
       } else {
         customError = "";
         customAmount = value;
@@ -151,24 +160,19 @@
       {#each bill.items as item, i}
         <li class={mode}>
           <div class="item-info">
-            <strong>{item.name} {mode === 'custom' ? `x ${item.quantity}` : ''}</strong>
-            <span class="unit-price">EUR {item.quantity ? (item.subtotal / item.quantity).toFixed(2) : "0.00"}</span>
+            <strong>{item.name} x {item.quantity}</strong>
+            <span class="unit-price">Precio unitario: {(item.subtotal / item.quantity).toFixed(2)} EUR</span>
+            <span class="pending-per-item">Pendiente: {item.subtotal.toFixed(2)} EUR</span>
           </div>
           {#if mode === 'split-items'}
             <div class="item-controls">
               <div class="item-quantity">
-                <button
-                  on:click={() => decreaseQuantity(i)}
-                  disabled={(selectedQuantities[i] || 0) <= 0}
-                >-</button>
+                <button on:click={() => decreaseQuantity(i)} disabled={(selectedQuantities[i] || 0) <= 0}>-</button>
                 <span class="quantity-num">{selectedQuantities[i] || 0}</span>
-                <button
-                  on:click={() => increaseQuantity(i)}
-                  disabled={(selectedQuantities[i] || 0) >= item.quantity}
-                >+</button>
+                <button on:click={() => increaseQuantity(i)} disabled={(selectedQuantities[i] || 0) >= getMaxSelectable(item.quantity)}>+</button>
               </div>
               <div class="item-total">
-                <span>EUR {((item.quantity ? (item.subtotal / item.quantity) : 0) * (selectedQuantities[i] || 0)).toFixed(2)}</span>
+                <span>{((item.quantity ? (item.subtotal / item.quantity) : 0) * (selectedQuantities[i] || 0)).toFixed(2)} EUR</span>
               </div>
             </div>
           {/if}
@@ -180,6 +184,17 @@
         <span>Total de la cuenta</span>
         <span>EUR {bill.total_price.toFixed(2)}</span>
       </div>
+
+      <div class="line subline">
+        <span>Total pendiente</span>
+        <span>EUR {pendingTotal.toFixed(2)}</span>
+      </div>
+
+      <div class="line subline">
+         <span>Total pagado</span>
+         <span>EUR {paidTotal.toFixed(2)}</span>
+      </div>
+
       {#if mode === 'split-items'}
         <div class="line highlight">
           <span>Tu parte a pagar</span>
@@ -191,9 +206,10 @@
           <input
             id="customAmount"
             type="number"
-            min="0"
-            max={bill.total_price}
-            value={customAmount}
+            min="0.50"
+            max={pendingTotal.toFixed(2)}
+            step="0.01"
+            bind:value={customAmount}
             on:input={onCustomAmountChange}
           />
           {#if customError}
@@ -206,13 +222,14 @@
         </div>
         <div class="line">
           <span>Restante</span>
-          <span>EUR {remainingTotal.toFixed(2)}</span>
+          <span>EUR {(pendingTotal - customAmount).toFixed(2)}</span>
         </div>
       {/if}
     </div>
     <div class="actions">
       <button class="remove-btn" on:click={goToOrder}>Eliminar división</button>
-      <button class="confirm-btn" on:click={confirmPayment}>
+      <button class="confirm-btn" on:click={confirmPayment}
+        disabled={mode === 'custom' ? (customAmount < 0.50 || !!customError) : totalSelected <= 0} >
         {mode === 'split-items' ? 'Confirmar división' : 'Confirmar cantidad'}
       </button>
     </div>
@@ -222,7 +239,7 @@
 {/if}
 
   
-  <style>
+<style>
     :global(body) {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
@@ -269,7 +286,12 @@
       font-size: 0.85rem;
       color: #777;
     }
-    
+    .pending-per-item {
+      display: block;
+      font-size: 0.85rem;
+      color: #92400e;
+      margin-top: 0.2rem;
+    }
     li.split-items {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -325,7 +347,10 @@
       color: #333;
     }
     .line.highlight {
-      font-weight: bold;
+      font-weight: bold;    
+    }
+    .line.subline {
+      font-weight: normal;
     }
     .custom-input {
       display: flex;
