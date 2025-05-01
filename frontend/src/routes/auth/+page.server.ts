@@ -4,6 +4,8 @@ import { redirect } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async ({ url, cookies, fetch }) => {
   const isRegistering = url.searchParams.get('register') === 'true';
+  const sessionExpired = url.searchParams.get('sessionExpired') === 'true';
+
   const restaurantId = url.searchParams.get('restaurantId') || '';
   const tableId = url.searchParams.get('tableId') || '';
 
@@ -15,5 +17,5 @@ export const load: PageServerLoad = async ({ url, cookies, fetch }) => {
       throw redirect(302, '/');
     }
   }
-  return { isRegistering, restaurantId, tableId };
+  return { isRegistering, sessionExpired, restaurantId, tableId };
 };

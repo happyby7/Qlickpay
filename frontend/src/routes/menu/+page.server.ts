@@ -5,6 +5,8 @@ import { redirect } from "@sveltejs/kit";
 export const load: PageServerLoad = async ({ url, cookies, fetch }) => {
   const restaurantId = url.searchParams.get("restaurantId");
   const tableId = url.searchParams.get("tableId");
+  const hasQRParams  = Boolean(restaurantId && tableId);
+  const restaurantName = url.searchParams.get("restaurantName") ?? null;
 
   if (!restaurantId) {
     console.error("🚨 Parámetros faltantes en la URL.");
@@ -20,5 +22,5 @@ export const load: PageServerLoad = async ({ url, cookies, fetch }) => {
     }
   }
   
-  return { restaurantId, tableId, error: null };
+  return { restaurantId, tableId, hasQRParams, restaurantName, error: null };
 };

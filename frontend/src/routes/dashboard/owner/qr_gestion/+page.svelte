@@ -1,10 +1,9 @@
 <script lang="ts">
     import { generateQRCodes } from "$lib/qr";
-    import { page } from "$app/stores";
+    import type { PageData } from './$types';
 
-    let restaurantId: number | null = null;
-
-    $: restaurantId = Number($page.url.searchParams.get("restaurantId")) || null;
+    export let data: PageData;
+    const { restaurantId } = data;
 
     let tableCount: number = 1;
     let qrCodes: string[] = [];

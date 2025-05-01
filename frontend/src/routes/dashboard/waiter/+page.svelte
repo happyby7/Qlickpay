@@ -3,14 +3,16 @@
   import { fetchTables, changeTableStatus, updateOrderItem } from '$lib/waiter';
   import { fetchBill, fetchBillPaid } from '$lib/qr';
   import { connectWebSocket, newOrders, tableStatuses } from '$lib/storeWebSocket';
-  import { page } from "$app/stores";
+  import type { PageData } from './$types';
   import type { Table, Bill } from "$lib/types";
   import { generateSessionTokenTable, clearTable } from '$lib/waiter';
+
+  export let data: PageData;
+  const restaurantId = data.restaurantId;
 
   $: pendingTotal = bill ? bill.items.reduce((sum, it) => sum + it.subtotal, 0): 0;
   $: paidTotal = paidBill ? paidBill.items.reduce((sum, it) => sum + it.subtotal, 0): 0;
     
-  let restaurantId = Number($page.data.restaurantId);
   let tables: Table[] = [];
   let selectedTableId: number | null = null;
 
@@ -183,7 +185,7 @@
 
   async function handleResetTable() {
       if (!selectedTableId) return;
-      await clearTable(selectedTableId, restaurantId);
+      await clearTable(selectedTableId, restaurantId!);
       sessionStorage.removeItem("session_token");
       await changeTableStatus(selectedTableId, 'available');
       closeOrderDetails();

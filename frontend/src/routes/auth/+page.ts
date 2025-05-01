@@ -2,7 +2,7 @@ import type { PageLoad } from './$types';
 import { browser } from '$app/environment';
 
 export const load: PageLoad = async ({ data }) => {
-  let { isRegistering, restaurantId, tableId } = data;
+  let { isRegistering, sessionExpired, restaurantId, tableId } = data;
 
   if (browser) {
     restaurantId = restaurantId || sessionStorage.getItem('restaurantId') || '';
@@ -17,5 +17,5 @@ export const load: PageLoad = async ({ data }) => {
     }
   }
 
-  return { isRegistering, restaurantId, tableId };
+  return { isRegistering, sessionExpired, restaurantId, tableId };
 };

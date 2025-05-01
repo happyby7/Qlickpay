@@ -1,11 +1,14 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { page } from "$app/stores";
+    import type { PageData } from "./$types";
     import { fetchBill, fetchBillPaid } from "$lib/qr";
     import { goto } from "$app/navigation";
-    import type { ModeState, Bill } from "$lib/types";
+    import type { Bill } from "$lib/types";
     import { createCheckoutSession } from '$lib/payment';
     import { connectWebSocket, billUpdates } from '$lib/storeWebSocket';
+
+    export let data: PageData;
+    const { restaurantId, tableId, mode } = data;
   
     let bill: Bill | null = null;
     let paidBill: Bill | null = null;
@@ -13,17 +16,10 @@
     let loading = true;
     let checkoutError: string = "";
     let error = "";
-
-    let restaurantId: string | null = null;
-    let tableId: string | null = null;
-  
-    let mode: ModeState['value'] = 'split-items';
     
     let selectedQuantities: number[] = [];
     let customAmount: number = 0;
     let customError: string = "";
-  
-    $: ({ restaurantId, tableId } = $page.data);
 
     $: pendingTotal = bill ? bill.items.map(it => Math.round(it.subtotal * 100)).reduce((sum, cents) => sum + cents, 0) / 100 : 0;
     $: paidTotal = paidBill ? paidBill.items.map(it => Math.round(it.subtotal * 100)).reduce((sum, cents) => sum + cents, 0) / 100 : 0
@@ -34,16 +30,7 @@
     $: totalSelected = (mode === 'split-items' && bill) ? bill.items.reduce((sum, item, i) => {
         const priceCents = Math.round((item.subtotal / item.quantity) * 100);
         return sum + priceCents * (selectedQuantities[i] || 0);
-      }, 0) / 100
-    : 0;
-
-    $: remainingTotal = bill 
-        ? Math.max(bill.total_price - (mode === 'split-items' ? totalSelected : customAmount), 0)
-        : 0;
-
-    $: mode = (['split-items', 'custom'].includes($page.url.searchParams.get('mode') ?? '')) 
-        ? ($page.url.searchParams.get('mode') as 'split-items' | 'custom') 
-        : 'split-items';
+      }, 0) / 100 : 0;
   
     async function loadBillData() {
       if (!restaurantId || !tableId) {

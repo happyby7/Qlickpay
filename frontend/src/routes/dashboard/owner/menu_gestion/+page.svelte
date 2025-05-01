@@ -1,10 +1,11 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { fetchMenuItems, addMenuItem, deleteMenuItem } from "$lib/menu";
-    import { page } from "$app/stores";
+    import type { PageData } from './$types';
     import type { MenuItem } from "$lib/types";
 
-    $: restaurantId = Number($page.url.searchParams.get("restaurantId")) || null;
+    export let data: PageData;
+    const { restaurantId } = data;
 
     let menuItems: MenuItem[] = [];
     let name = "";

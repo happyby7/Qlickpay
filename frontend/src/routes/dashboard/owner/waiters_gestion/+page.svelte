@@ -1,12 +1,11 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { fetchWaiters, addWaiter, deleteWaiter } from "$lib/waiter";
-    import { page } from "$app/stores";
+    import type { PageData } from './$types';
     import type { Waiter } from "$lib/types";
-
-    let restaurantId: number | null = null;
-
-    $: restaurantId = Number($page.url.searchParams.get("restaurantId")) || null;
+    
+    export let data: PageData;
+    const { restaurantId } = data;
 
     let waiters: Waiter[] = [];
     let fullName = "";

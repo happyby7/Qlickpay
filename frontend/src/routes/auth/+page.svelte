@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import { login, register } from "$lib/auth";
-  import { page } from "$app/stores"; 
-  import { onMount } from "svelte";
+  import type { PageData } from './$types';
+  import { goto } from '$app/navigation';
+  import { login, register } from '$lib/auth';
+  import { onMount } from 'svelte';
 
-  export let isRegistering: boolean;
-  export let restaurantId: string;
-  export let tableId: string;
+  export let data: PageData;
+  let { isRegistering, sessionExpired, restaurantId, tableId } = data;
 
   let email = "";
   let password = "";
@@ -15,9 +14,6 @@
   let error = "";
   let successMessage = "";
   let jwtExpiredMessage = "";
-
-  $: isRegistering = $page.url.searchParams.get("register") === "true";
-  $: sessionExpired = $page.url.searchParams.get('sessionExpired') === 'true';
 
   onMount(() => {
     window.addEventListener('pageshow', (event) => {

@@ -1,12 +1,11 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
-    import { page } from "$app/stores";
+    import type { PageData } from './$types';
     import { onMount } from "svelte";
 
-    $: user = $page.data.user;
-    $: restaurantId = $page.data.restaurantId;
-    $: tableId = $page.data.tableId;
-    $: hasQRParams = $page.data.hasQRParams;
+    export let data: PageData;
+
+    let { user, restaurantId, tableId, hasQRParams } = data;
 
     function goToMenu() {
         let storedRestaurantId = restaurantId || sessionStorage.getItem("restaurantId") || "";
@@ -27,12 +26,9 @@
     }
 
     onMount(() => {
-      window.addEventListener('pageshow', (event) => {
-       if (event.persisted) {
-        location.reload();
-       }
-      });  
+      window.addEventListener('pageshow', (event) => {if (event.persisted) location.reload();});  
     });
+    
 </script>
 
 <div class="dashboard-container">

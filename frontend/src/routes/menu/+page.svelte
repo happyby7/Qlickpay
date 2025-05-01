@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { page } from "$app/stores";
+  import type { PageData } from "./$types";
   import { fetchMenu } from "$lib/menu";
   import { sendOrder } from "$lib/order";
   import type { MenuItem } from "$lib/types";
@@ -12,9 +12,10 @@
   let order = new Map<string, number>();
   let totalPedido = 0;
   let orderWarning = "";
-  let restaurantName = $page.url.searchParams.get('restaurantName');
 
-  const { restaurantId, tableId, hasQRParams, error: pageError } = $page.data;
+  export let data: PageData;
+  const { restaurantId, tableId, hasQRParams, restaurantName, error: pageError } = data;
+
   if (pageError) error = pageError;
 
   const orderKey = (id: string | number): string => id.toString();
@@ -66,7 +67,7 @@
       return;
     }
     const pedido = {
-      table_id: tableId,
+      table_id: tableId!,
       order_type: "qr_scan",
       items: Array.from(order.entries())
         .map(([key, qty]) => {

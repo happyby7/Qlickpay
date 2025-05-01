@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { page } from "$app/stores";
+  import type { PageData } from "./$types";
   import { fetchBill, fetchBillPaid  } from "$lib/qr";
   import { goto } from "$app/navigation";
   import type { ModeState, Bill } from "$lib/types";
@@ -8,20 +8,19 @@
   import { createCheckoutSession } from "$lib/payment";
   import { connectWebSocket, billUpdates } from '$lib/storeWebSocket';
 
+  export let data: PageData;
+  const { restaurantId, tableId } = data;
+
   let bill: Bill | null = null;
   let paidBill: Bill | null = null;
   let loading = true;
   let error = "";
-
-  let restaurantId: string | null = null;
-  let tableId: string | null = null;
 
   let mode: ModeState['value'] = 'none';
   let showSplit: boolean = false;
 
   let checkoutError: string = "";
 
-  $: ({ restaurantId, tableId } = $page.data);
   $: pendingTotal = bill ? bill.items.reduce((sum, it) => sum + it.subtotal, 0) : 0;
   $: paidTotal = paidBill ? paidBill.items.reduce((sum, it) => sum + it.subtotal, 0) : 0;
   $: totalOrdered = pendingTotal + paidTotal;

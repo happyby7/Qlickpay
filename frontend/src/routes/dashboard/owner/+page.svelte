@@ -1,15 +1,15 @@
 <script lang="ts">
-    import { page } from "$app/stores";
-    import { goto } from "$app/navigation";
-
-    $: restaurantId = $page.data.restaurantId;
-
+    import { goto } from '$app/navigation';
+    import type { PageData } from './$types';
+  
+    export let data: PageData;
+    const { restaurantId } = data;
+  
     function navigateTo(path: string) {
-        goto(`${path}?restaurantId=${restaurantId}`);
+      goto(`${path}?restaurantId=${restaurantId}`);
     }
-
-</script>
-
+  </script>
+  
 {#if restaurantId}
     <h1>Panel de Dueño de restaurante</h1>
 
