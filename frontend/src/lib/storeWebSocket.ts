@@ -5,6 +5,7 @@ let socket: Socket | null = null;
 
 export const newOrders = createPersistentNewOrders();
 export const tableStatuses = writable<Record<number, string>>({});
+export const billUpdates = writable(0);
 
 function createPersistentNewOrders() {
   let initial: Record<number, number> = {};
@@ -43,7 +44,6 @@ export const connectWebSocket = () => {
   });
 
   socket.on('newOrder', (data: string) => {
-    console.log("🔔 Evento newOrder recibido:", data);
     try {
       const { tableId } = JSON.parse(data);
       newOrders.update((counts) => {
@@ -64,6 +64,15 @@ export const connectWebSocket = () => {
       });
     } catch (error) {
       console.error("Error al procesar updateTableStatus:", error);
+    }
+  });
+
+  socket.on('updateBill', (data: string) => {
+    try {
+      const { tableId } = JSON.parse(data);
+      billUpdates.update(n => n + 1);
+    } catch (e) {
+      console.error('Error procesando updateBill:', e);
     }
   });
 

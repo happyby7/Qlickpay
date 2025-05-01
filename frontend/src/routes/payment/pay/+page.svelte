@@ -5,6 +5,7 @@
     import { goto } from "$app/navigation";
     import type { ModeState, Bill } from "$lib/types";
     import { createCheckoutSession } from '$lib/payment';
+    import { connectWebSocket, billUpdates } from '$lib/storeWebSocket';
   
     let bill: Bill | null = null;
     let paidBill: Bill | null = null;
@@ -23,15 +24,18 @@
     let customError: string = "";
   
     $: ({ restaurantId, tableId } = $page.data);
-    $: pendingTotal = bill ? bill.items.reduce((sum, it) => sum + it.subtotal, 0) : 0;
-    $: paidTotal = paidBill? paidBill.items.reduce((sum, it) => sum + it.subtotal, 0) : 0;
 
-    $: totalSelected = (mode === 'split-items' && bill)
-        ? bill.items.reduce((acc, item, i) => {
-            const unitPrice = item.quantity ? item.subtotal / item.quantity : 0;
-            return acc + (selectedQuantities[i] || 0) * unitPrice;
-          }, 0)
-        : 0;
+    $: pendingTotal = bill ? bill.items.map(it => Math.round(it.subtotal * 100)).reduce((sum, cents) => sum + cents, 0) / 100 : 0;
+    $: paidTotal = paidBill ? paidBill.items.map(it => Math.round(it.subtotal * 100)).reduce((sum, cents) => sum + cents, 0) / 100 : 0
+    $: totalOrdered = pendingTotal + paidTotal;
+
+    $: if ($billUpdates > 0) loadBillData();
+
+    $: totalSelected = (mode === 'split-items' && bill) ? bill.items.reduce((sum, item, i) => {
+        const priceCents = Math.round((item.subtotal / item.quantity) * 100);
+        return sum + priceCents * (selectedQuantities[i] || 0);
+      }, 0) / 100
+    : 0;
 
     $: remainingTotal = bill 
         ? Math.max(bill.total_price - (mode === 'split-items' ? totalSelected : customAmount), 0)
@@ -51,6 +55,7 @@
       error = "";
       try {
         [bill, paidBill] = await Promise.all([fetchBill(restaurantId, tableId),fetchBillPaid(restaurantId, tableId)]);
+
         if (bill) {
           if (mode === 'split-items') {
             selectedQuantities = bill.items.map(() => 0);
@@ -136,11 +141,8 @@
     }
   
     onMount(() => {
-      window.addEventListener('pageshow', (event) => {
-        if (event.persisted) {
-          location.reload();
-        }
-      });
+      connectWebSocket(); 
+      window.addEventListener('pageshow', (event) => { if (event.persisted) location.reload();});
       loadBillData();
     });
   </script>
@@ -172,7 +174,7 @@
                 <button on:click={() => increaseQuantity(i)} disabled={(selectedQuantities[i] || 0) >= getMaxSelectable(item.quantity)}>+</button>
               </div>
               <div class="item-total">
-                <span>{((item.quantity ? (item.subtotal / item.quantity) : 0) * (selectedQuantities[i] || 0)).toFixed(2)} EUR</span>
+                <span>{(Math.round((item.subtotal / item.quantity) * 100) * (selectedQuantities[i] || 0) / 100).toFixed(2)} EUR</span>
               </div>
             </div>
           {/if}
@@ -182,7 +184,7 @@
     <div class="summary">
       <div class="line">
         <span>Total de la cuenta</span>
-        <span>EUR {bill.total_price.toFixed(2)}</span>
+        <span>EUR {totalOrdered.toFixed(2)}</span>
       </div>
 
       <div class="line subline">

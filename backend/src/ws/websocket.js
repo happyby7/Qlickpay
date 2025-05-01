@@ -22,7 +22,7 @@ const initWebSocket = (server) => {
     });
   });
   
-  return {newOrderEvent, updateStatusTable };
+  return {newOrderEvent, updateStatusTable, updateBill};
 };
 
 const newOrderEvent = (event, data) => {
@@ -41,4 +41,12 @@ const updateStatusTable = (event, data) => {
   }
 };
 
-module.exports = { initWebSocket, newOrderEvent, updateStatusTable };
+const updateBill = (event, data) => {
+  if (io) {
+    io.emit(event, data);
+  }else{
+    console.error('WebSocket io no inicializado');
+  }
+};
+
+module.exports = { initWebSocket, newOrderEvent, updateStatusTable, updateBill };

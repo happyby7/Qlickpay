@@ -88,6 +88,8 @@ const StripeConfirmSuccess = async (req, res) => {
     } else {
       await payAll(tableId);
     }
+
+    if (global.websocket) global.websocket.updateBill('updateBill',JSON.stringify({ tableId: tableId }))
   
     res.json({ success: true });
   } catch (err) {
@@ -146,8 +148,10 @@ async function payItemsByName(tableId, itemName, quantityToPay) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Lock para evitar race conditions
+    await client.query(`SELECT pg_advisory_xact_lock($1)`, [tableId]);
 
-    // Recojer los "order_id" pending
+    // Pedidos pendientes de esta mesa
     const { rows: orders } = await client.query(
       `SELECT id
          FROM orders
@@ -158,39 +162,72 @@ async function payItemsByName(tableId, itemName, quantityToPay) {
     );
 
     let toPay = quantityToPay;
+
     for (const { id: orderId } of orders) {
       if (toPay <= 0) break;
 
-      // Marcar tantos order_items pendientes de ese nombre como toPay
+      // Traer cada fila pendiente con quantity y subtotal ya como float
       const { rows } = await client.query(
-        `SELECT oi.id
-           FROM order_items oi
-           JOIN menu_items m ON oi.menu_item_id = m.id
-          WHERE oi.order_id = $1
-            AND m.name     = $2
-            AND oi.status  = 'pending'
-          ORDER BY oi.created_at
-          LIMIT $3`,
-        [orderId, itemName, toPay]
+        `SELECT
+           oi.id,
+           (oi.quantity  ::float) AS rowqty,
+           (oi.subtotal  ::float) AS subtotal,
+           oi.menu_item_id
+         FROM order_items oi
+         JOIN menu_items m ON oi.menu_item_id = m.id
+        WHERE oi.order_id = $1
+          AND m.name      = $2
+          AND oi.status   = 'pending'
+        ORDER BY oi.created_at`,
+        [orderId, itemName]
       );
       if (!rows.length) continue;
 
-      const ids = rows.map(r => r.id);
-      await client.query(
-        `UPDATE order_items
-           SET status     = 'paid',
-               updated_at = NOW()
-         WHERE id = ANY($1)`,
-        [ids]
-      );
+      for (const { id: oiId, rowqty, subtotal, menu_item_id } of rows) {
+        if (toPay <= 0) break;
 
-      toPay -= ids.length;
+        if (toPay >= rowqty) {
+          // pago íntegro de toda la fila
+          await client.query(
+            `UPDATE order_items
+               SET status='paid', updated_at=NOW()
+             WHERE id=$1`,
+            [oiId]
+          );
+          toPay -= rowqty;
+        } else {
+          // pago parcial -> creamos línea pagada y ajustamos la pendiente
+          const paidQty      = toPay;
+          const paidSubtotal = parseFloat((subtotal / rowqty * paidQty).toFixed(2));
+          const leftoverQty  = parseFloat((rowqty - paidQty).toFixed(2));
+          const leftoverSub  = parseFloat((subtotal - paidSubtotal).toFixed(2));
 
-      // Si no quedan más ítems pending en ese pedido, se marca
+          // insertamos la parte pagada
+          await client.query(
+            `INSERT INTO order_items (order_id, menu_item_id, quantity, subtotal, status)
+             VALUES ($1, $2, $3, $4, 'paid')`,
+            [orderId, menu_item_id, paidQty, paidSubtotal]
+          );
+
+          // ajustamos la fila original
+          await client.query(
+            `UPDATE order_items
+               SET quantity   = $1,
+                   subtotal   = $2,
+                   updated_at = NOW()
+             WHERE id = $3`,
+            [leftoverQty, leftoverSub, oiId]
+          );
+
+          toPay = 0;
+        }
+      }
+
+      // si este pedido ya no tiene items 'pending', lo marcamos pagado
       await client.query(
         `UPDATE orders
-           SET status     = 'paid',
-               is_paid    = TRUE,
+           SET status   = 'paid',
+               is_paid  = TRUE,
                updated_at = NOW()
          WHERE id = $1
            AND NOT EXISTS (
@@ -203,7 +240,7 @@ async function payItemsByName(tableId, itemName, quantityToPay) {
       );
     }
 
-    // Si ya no hay pedidos pending en la mesa, se marca la mesa
+    // si ya no quedan pedidos pendientes en la mesa, marcamos la mesa pagada
     const result = await client.query(
       `UPDATE tables
          SET status     = 'paid',
@@ -217,8 +254,13 @@ async function payItemsByName(tableId, itemName, quantityToPay) {
          )`,
       [tableId]
     );
-    if (result.rowCount > 0 && global.websocket) global.websocket.updateStatusTable('updateTableStatus',JSON.stringify({ tableId, status: 'paid' }));
-    
+    if (result.rowCount > 0 && global.websocket) {
+      global.websocket.updateStatusTable(
+        'updateTableStatus',
+        JSON.stringify({ tableId, status: 'paid' })
+      );
+    }
+
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
@@ -227,6 +269,9 @@ async function payItemsByName(tableId, itemName, quantityToPay) {
     client.release();
   }
 }
+
+
+
 async function payCustomAmount(tableId, amountToPay) {
   const client = await pool.connect();
   try {

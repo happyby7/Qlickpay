@@ -45,16 +45,19 @@ async function fetchBillByStatus(restaurantId: string,tableId: string,status: "p
 
         data.bills.forEach((bill: any) => {
             total_price += parseFloat(bill.total_price);
+        
             bill.items.forEach((item: any) => {
                 const sub = parseFloat(item.subtotal);
+                const qty = parseFloat(item.quantity);
+        
                 if (itemsMap.has(item.name)) {
                     const e = itemsMap.get(item.name)!;
-                    e.quantity += item.quantity;
+                    e.quantity += qty;
                     e.subtotal += sub;
                 } else {
                     itemsMap.set(item.name, {
                         name: item.name,
-                        quantity: item.quantity,
+                        quantity: qty,
                         subtotal: sub
                     });
                 }

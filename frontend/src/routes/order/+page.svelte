@@ -6,11 +6,13 @@
   import type { ModeState, Bill } from "$lib/types";
   import { fetchTableStatus } from "$lib/order";
   import { createCheckoutSession } from "$lib/payment";
+  import { connectWebSocket, billUpdates } from '$lib/storeWebSocket';
 
   let bill: Bill | null = null;
   let paidBill: Bill | null = null;
   let loading = true;
   let error = "";
+
   let restaurantId: string | null = null;
   let tableId: string | null = null;
 
@@ -22,6 +24,8 @@
   $: ({ restaurantId, tableId } = $page.data);
   $: pendingTotal = bill ? bill.items.reduce((sum, it) => sum + it.subtotal, 0) : 0;
   $: paidTotal = paidBill ? paidBill.items.reduce((sum, it) => sum + it.subtotal, 0) : 0;
+  $: totalOrdered = pendingTotal + paidTotal;
+  $: if ($billUpdates > 0) { loadBill(); }
 
   async function robustCheckStatus() {
     if (!restaurantId || !tableId) return;
@@ -39,7 +43,6 @@
 
   async function loadBill() {
     if (!restaurantId || !tableId) {
-      console.error("❌ No se encontró restaurantId o tableId.");
       error = "Error: No se ha identificado la mesa.";
       return;
     }
@@ -47,6 +50,7 @@
     error = "";
     try {
       [bill, paidBill] = await Promise.all([fetchBill(restaurantId, tableId), fetchBillPaid(restaurantId, tableId)]);
+
       if (!bill) {
         error = "No se pudo cargar la cuenta. Inténtalo de nuevo.";
       }
@@ -71,15 +75,11 @@
   }
 
   onMount(() => {
-    window.addEventListener('pageshow', (event) => {
-      if (event.persisted) {
-        location.reload();
-      }
-    });
-    window.addEventListener('popstate', robustCheckStatus);
-    
+    connectWebSocket();
     robustCheckStatus();
     loadBill();
+    window.addEventListener('pageshow', (event) => {if (event.persisted) location.reload();});
+    window.addEventListener('popstate', robustCheckStatus);
 });
 
 
@@ -111,7 +111,7 @@
         <ul class="bill-list pending">
           {#each bill.items as item}
             <li class="bill-item pending">
-              {item.quantity}x {item.name} — {item.subtotal.toFixed(2)} <small>EUR</small>
+              {item.quantity}x {item.name} - {item.subtotal.toFixed(2)} <small>EUR</small>
             </li>
           {/each}
         </ul>
@@ -127,7 +127,7 @@
         <ul class="bill-list paid">
           {#each paidBill.items as item}
             <li class="bill-item paid">
-              {item.quantity}x {item.name} — {item.subtotal.toFixed(2)} <small>EUR</small>
+              {item.quantity}x {item.name} - {item.subtotal.toFixed(2)} <small>EUR</small>
             </li>
           {/each}
         </ul>
@@ -139,7 +139,7 @@
       {/if}
 
       <h2 class="grand-total">
-        Total mesa: {bill.total_price.toFixed(2)} <small>EUR</small>
+        Total pedido: {totalOrdered.toFixed(2)} <small>EUR</small>
       </h2>
     {/if}
   </div>
