@@ -6,9 +6,9 @@ export const load: PageServerLoad = async ({ parent }) => {
   const { user, token } = await parent();
 
   if (!token || typeof token !== 'string') throw redirect(302, '/auth?sessionExpired=true');
-  
-  if (!user || user.role !== 'waiter') {
-    console.error('No tienes permisos de mesero. Redirigiendo...');
+
+  if (!user || user.role !== 'admin') {
+    console.error('No tienes permisos de administrador. Redirigiendo...');
     throw redirect(302, `/`);
   }
   

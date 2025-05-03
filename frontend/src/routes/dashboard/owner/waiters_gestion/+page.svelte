@@ -2,7 +2,7 @@
     import { onMount } from "svelte";
     import { fetchWaiters, addWaiter, deleteWaiter } from "$lib/waiter";
     import type { PageData } from './$types';
-    import type { Waiter } from "$lib/types";
+    import type { Waiter } from "../../../../lib/types";
     
     export let data: PageData;
     const { restaurantId } = data;

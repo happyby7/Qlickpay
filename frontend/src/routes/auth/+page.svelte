@@ -79,7 +79,7 @@
         const response = await register(full_name, email, password);
         
         if (response.success) {
-            successMessage = "¡Registro exitoso! Ahora inicia sesión en QlickPay.";
+            successMessage = "¡Registro exitoso! Ahora ya puedes iniciar sesión.";
             setTimeout(() => goto("/"), 1000); 
         } else {
             error = response.message || "Error en el registro.";

@@ -49,9 +49,9 @@ const login = async (req, res) => {
             }
         }
 
-        const token = jwt.sign({ id: user.id, role: user.role, name:user.full_name, restaurantId }, process.env.JWT_SECRET, { expiresIn: '15m' }); 
+        const token = jwt.sign({ id: user.id, role: user.role, name:user.full_name, restaurantId }, process.env.JWT_SECRET, { expiresIn: '20m' }); 
 
-        const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: "lax", path: '/',maxAge: 15 * 60 * 1000, };
+        const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: "lax", path: '/', maxAge: 20 * 60 * 1000, };
 
         res.cookie("auth", token, cookieOptions);
         res.json({ success: true, token, role: user.role });

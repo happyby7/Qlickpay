@@ -8,7 +8,7 @@
   const { token, restaurantId, tableId, error } = data;
 
   onMount(() => {
-    if (token && restaurantId && tableId) {
+    if (token) {
       goto(`/?restaurantId=${restaurantId}&tableId=${tableId}`, { replaceState: true });
     }
   });

@@ -1,73 +1,65 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { browser } from '$app/environment';
+  import { goto } from '$app/navigation';
   import { auth } from '$lib/auth';
   import ButtonLogout from '../components/ButtonLogout.svelte';
   import { jwtDecode } from 'jwt-decode';
-  import { goto } from '$app/navigation';
 
-  export let data;
+  export let data: { sessionExpired: boolean; restaurantId: string | null; tableId: string | null; hasQRParams: boolean; user: { role?: string } | null;
+    token?: string | { auth: string };
+  };
 
+  let restaurantId = '';
+  let tableId = '';
   let isGuest = false;
-  let restaurantId = "";
-  let tableId = "";
+  let role = 'customer';
 
-  onMount(() => {
-    if (browser) {
-      const url = new URL(window.location.href);
-      const qsRestaurantId = url.searchParams.get("restaurantId");
-      const qsTableId = url.searchParams.get("tableId");
+  if (browser) {
+    const tokenStr = typeof data.token === 'object' ? data.token.auth : data.token;
+    auth.set(tokenStr ?? null);
+    const url = new URL(location.href);
+    const qsRest = url.searchParams.get('restaurantId');
+    const qsTab  = url.searchParams.get('tableId');
 
-      if (qsRestaurantId && qsTableId) {
-        sessionStorage.setItem("restaurantId", qsRestaurantId);
-        sessionStorage.setItem("tableId", qsTableId);
-        restaurantId = qsRestaurantId;
-        tableId = qsTableId;
-      } else {
-        restaurantId = sessionStorage.getItem("restaurantId") || "";
-        tableId = sessionStorage.getItem("tableId") || "";
-      }
-      isGuest = sessionStorage.getItem('isGuest') === 'true';
+    if (qsRest && qsTab) {
+      sessionStorage.setItem('restaurantId', qsRest);
+      sessionStorage.setItem('tableId', qsTab);
+      restaurantId = qsRest;
+      tableId = qsTab;
+    } else {
+      restaurantId = sessionStorage.getItem('restaurantId') || '';
+      tableId = sessionStorage.getItem('tableId') || '';
     }
 
-    const tokenStr = data.token && (typeof data.token === 'object' ? data.token.auth : data.token);
-    auth.set(tokenStr || null);
-  });
-
-  let role = "customer";
-  $: if ($auth) {
-    try {
-      role = (jwtDecode($auth) as { role?: string })?.role || "customer";
-    } catch (error) {
-      console.error("❌ Error al decodificar el token:", error);
-      role = "customer";
-    }
+    isGuest = sessionStorage.getItem('isGuest') === 'true';
   }
 
-  function goToDashboard() {
-    if (role === "customer") {
-      if (restaurantId && tableId) {
-        goto(`/dashboard/customer?restaurantId=${restaurantId}&tableId=${tableId}`);
-      } else {
-        goto(`/dashboard/customer`);
-      }
-    } else {
-      goto(`/dashboard/${role}`);
+  $: if (browser && data.sessionExpired && location.pathname !== '/auth') {
+    auth.set(null);
+    sessionStorage.clear();
+    goto('/auth?sessionExpired=true', { replaceState: true });
+  }
+
+  $: if (browser && $auth) {
+    try {
+      role = (jwtDecode<{ role?: string }>($auth).role) || 'customer';
+    } catch {
+      role = 'customer';
     }
   }
 </script>
 
 <nav>
-  <a href={role === "customer" && restaurantId && tableId ? `/?restaurantId=${restaurantId}&tableId=${tableId}` : "/"}>
-    Inicio
-  </a>
+  <a href={role === 'customer' && restaurantId && tableId ? `/?restaurantId=${restaurantId}&tableId=${tableId}` : '/' }>Inicio</a>
+
   {#if $auth || isGuest}
-    {#if role === "customer" && restaurantId && tableId}
+    {#if role === 'customer' && restaurantId && tableId}
       <a href={`/dashboard/customer?restaurantId=${restaurantId}&tableId=${tableId}`}>Dashboard</a>
     {:else}
       <a href={`/dashboard/${role}`}>Dashboard</a>
     {/if}
   {/if}
+
   {#if $auth}
     <ButtonLogout />
   {/if}

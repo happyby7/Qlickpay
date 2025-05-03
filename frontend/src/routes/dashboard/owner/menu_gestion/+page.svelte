@@ -2,7 +2,7 @@
     import { onMount } from "svelte";
     import { fetchMenuItems, addMenuItem, deleteMenuItem } from "$lib/menu";
     import type { PageData } from './$types';
-    import type { MenuItem } from "$lib/types";
+    import type { MenuItem } from "../../../../lib/types";
 
     export let data: PageData;
     const { restaurantId } = data;

@@ -3,7 +3,7 @@
   import type { PageData } from "./$types";
   import { fetchBill, fetchBillPaid  } from "$lib/qr";
   import { goto } from "$app/navigation";
-  import type { ModeState, Bill } from "$lib/types";
+  import type { ModeState, Bill } from "../../lib/types";
   import { fetchTableStatus } from "$lib/order";
   import { createCheckoutSession } from "$lib/payment";
   import { connectWebSocket, billUpdates } from '$lib/storeWebSocket';

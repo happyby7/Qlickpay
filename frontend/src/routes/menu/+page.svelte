@@ -3,7 +3,7 @@
   import type { PageData } from "./$types";
   import { fetchMenu } from "$lib/menu";
   import { sendOrder } from "$lib/order";
-  import type { MenuItem } from "$lib/types";
+  import type { MenuItem } from "../../lib/types";
 
   let menuItems: MenuItem[] = [];
   let error = "";

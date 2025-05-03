@@ -1,45 +1,21 @@
-import type { PageServerLoad } from "./$types";
-import { getTokenFromCookies } from "$lib/auth";
-import { jwtDecode } from "jwt-decode";
-import type { TokenPayload } from "$lib/types";
-import { redirect } from "@sveltejs/kit";
-import { validateSessionToken } from '$lib/guard';
+import type { PageServerLoad } from './$types';
+import { redirect } from '@sveltejs/kit';
+import type { TokenPayload } from '$lib/types';
 
-export const load: PageServerLoad = async ({ url, cookies, fetch }) => {
-  const restaurantId = url.searchParams.get("restaurantId") || "";
-  const tableId = url.searchParams.get("tableId") || "";
-  const hasQRParams = !!(restaurantId && tableId);
+export const load: PageServerLoad = async ({ parent }) => {
+  const { restaurantId, tableId, hasQRParams, user } = await parent();
+  
+  let currentUser: TokenPayload | null = null;
 
-  if (hasQRParams) {
-    try {
-      await validateSessionToken(restaurantId, tableId, cookies, fetch);
-    } catch {
-      console.error('Validación de token de sesión de mesa fallida. Redirigiendo...');
-      throw redirect(302, "/");
-    }
-  }
-
-  const authCookie = cookies.get("auth") || "";
-  let token: string | null | { auth: string } = await getTokenFromCookies(authCookie, fetch);
-
-  if (token && typeof token === "object" && "auth" in token) {
-    token = token.auth;
-  }
-
-  let user: TokenPayload | null = null;
-  if (token && typeof token === "string") {
-    try {
-      user = jwtDecode<TokenPayload>(token);
-    } catch (error) {
-      console.error("Error al decodificar el token:", error);
-      throw redirect(302, "/auth");
-    }
-    if (user && user.role !== "customer") {
-      throw redirect(302, `/dashboard/${user.role}`);
-    }
+  if (user && user.role === 'customer') {
+    currentUser = user;
+  } else if (!user) {
+    currentUser = { id: '0', role: 'Usuario', name: 'invitado' };
   } else {
-    user = { id: "0", role: "Usuario", name: "invitado" };
+    console.error('No tienes permisos de cliente. Redirigiendo...');
+    throw redirect(302, `/`);
   }
 
-  return { user, restaurantId, tableId, hasQRParams };
+  return { user: currentUser, restaurantId, tableId, hasQRParams };
 };
+

@@ -1,26 +1,15 @@
-// src/routes/owner/+layout.server.ts
 import type { LayoutServerLoad } from './$types';
-import { getTokenFromCookies } from '$lib/auth';
-import { jwtDecode } from 'jwt-decode';
-import type { TokenPayload } from '$lib/types';
 import { redirect } from '@sveltejs/kit';
 
-export const load: LayoutServerLoad = async ({ cookies, fetch }) => {
-  const raw = cookies.get('auth') || '';
+export const load: LayoutServerLoad = async ({ parent }) => {
+  const { user, token } = await parent();
 
-  let token = await getTokenFromCookies(raw, fetch);
-  if (token && typeof token === 'object' && 'auth' in token) token = token.auth;
+  if (!token || typeof token !== 'string') throw redirect(302, '/auth?sessionExpired=true');
 
-  if (!token || typeof token !== 'string') throw redirect(302, '/auth');
-  
-  let user: TokenPayload;
-  try {
-    user = jwtDecode<TokenPayload>(token);
-  } catch {
-    throw redirect(302, '/auth');
+  if (!user || user.role !== 'owner') {
+    console.error('No tienes permisos de dueño de restaurante. Redirigiendo...');
+    throw redirect(302, `/`);
   }
-
-  if (user.role !== 'owner') throw redirect(302, `/dashboard/${user.role}`);
-
-  return { user, restaurantId: user.restaurantId};
+  
+  return { restaurantId: user.restaurantId };
 };

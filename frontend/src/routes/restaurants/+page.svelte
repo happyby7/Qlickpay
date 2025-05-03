@@ -1,6 +1,6 @@
 <script lang="ts">
     import { fetchRestaurants } from "$lib/restaurant";
-    import type { Restaurant } from "$lib/types";
+    import type { Restaurant } from "../../lib/types";
     import { onMount } from "svelte";
     import { goto } from "$app/navigation";
     

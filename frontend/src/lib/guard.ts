@@ -1,8 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { fetchTableStatus } from '$lib/order';
 import { fetchSessionToken } from '$lib/auth';
-import type { GuardOptions } from "$lib/types";
-import type { RequestEvent } from '@sveltejs/kit';
+import type { GuardOptions } from "$lib/types.ts";
 
 export async function checkTableGuard(url: URL, options: GuardOptions = { requireParams: true }): Promise<void> {
   const restaurantIdStr = url.searchParams.get('restaurantId');
@@ -51,18 +50,18 @@ export async function checkTableGuard(url: URL, options: GuardOptions = { requir
 export async function validateSessionToken( restaurantId: string,tableId: string,cookies: any, fetchFn: typeof fetch): Promise<string> {
   const cookieToken = cookies.get('valid');
   if (!cookieToken) {
-    console.error("🚨 No se encontró token de sesión en la cookie.");
-    throw redirect(302, "/");
+    console.error("Sesión de mesa caducada, escanea de nuevo el QR para volver a la mesa.");
+    throw redirect(302, '/?mesaSinSesion=true');
   }
   const serverToken = await fetchSessionToken(restaurantId, tableId, fetchFn);
   if (!serverToken) {
-    console.error("🚨 No se pudo obtener token del backend.");
-    throw redirect(302, "/");
+    console.error("La mesa se encuentra inactiva, pongase en contacto con uno de nuestros empleados.");
+    throw redirect(302, '/?mesaNoActiva=true');
   }
 
   if (cookieToken !== serverToken) {
-    console.error("🚨 Token de sesión inválido o no coincide.");
-    throw redirect(302, "/");
+    console.error("Error al validar la sesión. Por favor, inténtalo de nuevo más tarde.");
+    throw redirect(302, '/?errorValidacion=true');
   }
   return serverToken;
 }

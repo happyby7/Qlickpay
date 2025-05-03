@@ -4,11 +4,11 @@
   import { fetchBill, fetchBillPaid } from '$lib/qr';
   import { connectWebSocket, newOrders, tableStatuses } from '$lib/storeWebSocket';
   import type { PageData } from './$types';
-  import type { Table, Bill } from "$lib/types";
+  import type { Table, Bill } from "../../../lib/types";
   import { generateSessionTokenTable, clearTable } from '$lib/waiter';
 
   export let data: PageData;
-  const restaurantId = data.restaurantId;
+  const { restaurantId } = data; 
 
   $: pendingTotal = bill ? bill.items.reduce((sum, it) => sum + it.subtotal, 0): 0;
   $: paidTotal = paidBill ? paidBill.items.reduce((sum, it) => sum + it.subtotal, 0): 0;
