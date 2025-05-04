@@ -104,8 +104,9 @@
     if (!bill) return;
     const quantityToRemove = Number(removals[index]);
     const item = bill.items[index];
+
     if (!item) return;
-    if (!quantityToRemove || isNaN(quantityToRemove) || quantityToRemove < 1) {
+    if (isNaN(quantityToRemove) || quantityToRemove <= 0) {
       removalErrors[index] = "Ingrese un número válido mayor que 0.";
       return;
     }
@@ -121,8 +122,9 @@
     if (!bill) return;
     const removalQty = Number(removals[index]);
     const item = bill.items[index];
+
     if (!item) return;
-    if (!removalQty || isNaN(removalQty) || removalQty < 1) {
+    if (isNaN(removalQty) || removalQty <= 0) {
       removalErrors[index] = "Ingrese un número válido mayor que 0.";
       return;
     }
@@ -137,6 +139,7 @@
       removalErrors[index] = "Error actualizando en el servidor.";
       return;
     }
+    
     const newQuantity = item.quantity - removalQty;
     const pricePerUnit = item.quantity > 0 ? item.subtotal / item.quantity : 0;
     if (newQuantity > 0) {

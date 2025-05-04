@@ -1,15 +1,12 @@
-const { Pool } = require("pg");
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const { findAllRestaurants } = require('../models/restaurant.model');
 
 const getRestaurants = async (req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT id, name FROM restaurants`
-        );
+        const restaurants = await findAllRestaurants();
 
-        res.json({ success: true, restaurants: result.rows });
+        res.json({ success: true, restaurants });
     } catch (error) {
-        console.error("❌ Error al obtener restaurantes:", error);
+        console.error("Error al obtener restaurantes:", error);
         res.status(500).json({ success: false, message: "Error al obtener los restaurantes." });
     }
 };

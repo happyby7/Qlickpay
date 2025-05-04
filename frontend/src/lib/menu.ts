@@ -15,10 +15,6 @@ export async function fetchMenu(restaurantId: string): Promise<{ menuItems: Menu
     }
 }
 
-export async function fetchMenuItems(restaurantId: number) {
-    return await apiFetch(`/api/menu?restaurantId=${restaurantId}`);
-}
-
 export async function addMenuItem(restaurantId: number, name: string, description: string, price: number, category: string) {
     return await apiFetch("/api/menu", {
         method: "POST",

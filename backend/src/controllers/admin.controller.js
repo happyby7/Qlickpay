@@ -1,52 +1,24 @@
-const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
 const bcrypt = require("bcryptjs");
+const { findUserByEmail, findRestaurantByName, createUserId, createRestaurant, assignOwnerToRestaurant} = require("../models/admin.model");
 
 const registerOwner = async (req, res) => {
     const { full_name, email, phone, password, restaurant_name, role } = req.body;
 
-    if (role !== "owner") {
-        return res.status(403).json({ success: false, message: "No tienes permiso para crear este usuario." });
-    }
-
+    if (role !== "owner") return res.status(403).json({ success: false, message: "No tienes permiso para crear este usuario." });
+    
     try {
+        if (await findUserByEmail(email)) return res.status(409).json({ success: false, message: "El correo ya está registrado." });
+        if (await findRestaurantByName(restaurant_name)) return res.status(409).json({ success: false, message: "El restaurante ya está registrado." });
+        
+        const password_hash = await bcrypt.hash(password, 10);
+        const { id: userId } = await createUserId({ full_name, email, phone, password_hash });
+        const { id: restaurantId } = await createRestaurant({ restaurant_name, email, phone });
 
-        if ((await pool.query("SELECT id FROM users WHERE email = $1", [email])).rowCount > 0) {
-            return res.status(409).json({ success: false, message: "El correo ya está registrado." });
-        }
+        await assignOwnerToRestaurant(userId, restaurantId);
 
-        if ((await pool.query("SELECT id FROM restaurants WHERE name = $1", [restaurant_name])).rowCount > 0) {
-            return res.status(409).json({ success: false, message: "El restaurante ya está registrado." });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await pool.query(
-            `INSERT INTO users (full_name, email, phone, password_hash, role) 
-             VALUES ($1, $2, $3, $4, 'owner');`,
-            [full_name, email, phone, hashedPassword]
-        );
-
-        const userIdResult = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
-
-        await pool.query(
-            `INSERT INTO restaurants (name, email, phone) 
-             VALUES ($1, $2, $3);`,
-            [restaurant_name, email, phone]
-        );
-
-        const restaurantIdResult = await pool.query("SELECT id FROM restaurants WHERE name = $1", [restaurant_name]);
-
-        await pool.query(
-            `INSERT INTO user_restaurant (user_id, restaurant_id, role) 
-             VALUES ($1, $2, 'owner');`,
-            [userIdResult.rows[0].id, restaurantIdResult.rows[0].id]
-        );
-
-        res.json({ success: true, message: `Dueño ${full_name} registrado con éxito. Restaurante ID: ${restaurantIdResult.rows[0].id}.` });
-
+        res.json({ success: true, message: `Dueño ${full_name} registrado con éxito. Restaurante ID: ${restaurantId}.`});
     } catch (error) {
-        console.error("❌ Error al registrar dueño:", error);
+        console.error("Error al registrar dueño:", error);
         res.status(500).json({ success: false, message: "Error en el registro." });
     }
 };

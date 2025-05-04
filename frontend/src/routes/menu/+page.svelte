@@ -21,10 +21,6 @@
   const orderKey = (id: string | number): string => id.toString();
 
   async function loadMenu() {
-    if (!restaurantId) {
-      error = "No se encontró el restaurante.";
-      return;
-    }
     try {
       const response = await fetchMenu(restaurantId);
       menuItems = response.menuItems;

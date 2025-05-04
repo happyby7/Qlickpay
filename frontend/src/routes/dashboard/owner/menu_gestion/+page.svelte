@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { fetchMenuItems, addMenuItem, deleteMenuItem } from "$lib/menu";
+    import { fetchMenu, addMenuItem, deleteMenuItem } from "$lib/menu";
     import type { PageData } from './$types';
     import type { MenuItem } from "../../../../lib/types";
 
@@ -17,8 +17,12 @@
     let showSuccess = false;
 
     async function loadMenu() {
-        if (!restaurantId) return;
-        menuItems = await fetchMenuItems(restaurantId);
+        try {
+          const response = await fetchMenu(String(restaurantId));
+          menuItems = response.menuItems;
+        } catch (e) {
+            console.error(e);
+        }
     }
 
     async function registerMenuItem() {
@@ -27,7 +31,7 @@
             return;
         }
 
-        const response = await addMenuItem(restaurantId, name, description, parseFloat(price), category);
+        const response = await addMenuItem(Number(restaurantId), name, description, parseFloat(price), category);
         if (response.success) {
             loadMenu();
             name = "";
@@ -77,7 +81,7 @@
     {:else}
         {#each menuItems as item}
             <li>
-                {item.name} - {item.description} - ${Number(item.price).toFixed(2)} ({item.category})
+                {item.name} - {item.description} - {Number(item.price).toFixed(2)} € ({item.category})
                 <button class="delete-btn" on:click={() => removeMenuItem(item.id)}>Eliminar</button>
             </li>
         {/each}

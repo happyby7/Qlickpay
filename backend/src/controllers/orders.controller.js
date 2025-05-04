@@ -1,72 +1,45 @@
 const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const { v4: uuidv4 } = require("uuid");
+
+const {uuidv4, findTableRestaurant, insertOrder, insertOrderItems, fetchMenuItem, getStatusByTable } = require('../models/orders.model');
 
 const placeOrder = async (req, res) => {
     const { table_id, user_id, order_type, items } = req.body;
+    const orderId = uuidv4();
+    const orderItemsValues = [];
 
-    if (!table_id || !items || items.length === 0) {
-        return res.status(400).json({ success: false, message: "Datos de pedido incompletos." });
-    }
+    let totalPrice = 0;
 
+    if (!table_id || !items || items.length === 0) return res.status(400).json({ success: false, message: "Datos de pedido incompletos." });
+    
     try {
-        const tableCheck = await pool.query(`SELECT restaurant_id FROM tables WHERE id = $1`, [table_id]);
+        const restaurant_id = await findTableRestaurant(table_id);
 
-        if (tableCheck.rowCount === 0) {
-            return res.status(404).json({ success: false, message: "Mesa no encontrada." });
-        }
-
-        const restaurant_id = tableCheck.rows[0].restaurant_id;
-
-        let totalPrice = 0;
-        const orderId = uuidv4();
-        const orderItemsValues = [];
-
+        if (!restaurant_id) return res.status(404).json({ success: false, message: "Mesa no encontrada." });
+        
         for (const item of items) {
-            const menuItem = await pool.query(
-                `SELECT price, restaurant_id FROM menu_items WHERE id = $1`,
-                [item.menu_item_id]
-            );
+            const menuItem = await fetchMenuItem(item.menu_item_id);
 
-            if (menuItem.rowCount === 0) {
-                console.warn(`❌ Item no encontrado: ${item.menu_item_id}`);
+            if (!menuItem) {
+                console.warn(`Item no encontrado: ${item.menu_item_id}`);
                 continue;
             }
 
-            const menuItemData = menuItem.rows[0];
-
-            if (menuItemData.restaurant_id !== restaurant_id) {
-                console.warn(`❌ Item ${item.menu_item_id} no pertenece al restaurante ${restaurant_id}`);
+            if (menuItem.restaurant_id !== restaurant_id) {
+                console.warn(`Item ${item.menu_item_id} no pertenece al restaurante ${restaurant_id}`);
                 continue;
             }
 
-            const price = parseFloat(menuItemData.price);
-            const subtotal = price * item.quantity;
+            const subtotal = parseFloat(menuItem.price) * item.quantity;
             totalPrice += subtotal;
             orderItemsValues.push([orderId, item.menu_item_id, item.quantity, subtotal]);
         }
 
-        if (orderItemsValues.length === 0) {
-            return res.status(400).json({ success: false, message: "No se encontraron ítems válidos en el pedido." });
-        }
-
+        if (!orderItemsValues.length) return res.status(400).json({ success: false, message: "No se encontraron ítems válidos en el pedido." });
+        
         await pool.query("BEGIN");
-
-        await pool.query(
-            `INSERT INTO orders (id, table_id, user_id, order_type, status, total_price, is_paid) 
-             VALUES ($1, $2, $3, $4, 'pending', $5, false);`,
-            [orderId, table_id, user_id || null, order_type || 'qr_scan', totalPrice]
-        );
-
-        const insertOrderItemsQuery = `
-            INSERT INTO order_items (order_id, menu_item_id, quantity, subtotal) 
-            VALUES ${orderItemsValues
-            .map((_, i) => `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`)
-            .join(",")}`;
-
-        const flattenedValues = orderItemsValues.flat();
-        await pool.query(insertOrderItemsQuery, flattenedValues);    
-
+        await insertOrder({ orderId, table_id, user_id: user_id || null, order_type: order_type || 'qr_scan', totalPrice });
+        await insertOrderItems(orderItemsValues);    
         await pool.query("COMMIT"); 
 
         if (global.websocket){
@@ -75,10 +48,9 @@ const placeOrder = async (req, res) => {
         } 
 
         res.json({ success: true, message: "Pedido registrado exitosamente.", orderId });
-
     } catch (error) {
         await pool.query("ROLLBACK");
-        console.error("❌ ERROR DETECTADO:", error.stack || error);
+        console.error("Error al procesar el pedido:", error.stack || error);
         res.status(500).json({ success: false, message: "Error al procesar el pedido.", error: error.message });
     }
 };
@@ -86,26 +58,18 @@ const placeOrder = async (req, res) => {
 const getTableStatus = async (req, res) => {
     const { restaurantId, tableId } = req.params;
   
-    if (!restaurantId || !tableId) {
-      return res.status(400).json({ error: 'Faltan parámetros.' });
-    }
-  
+    if (!restaurantId || !tableId) return res.status(400).json({ error: 'Faltan parámetros en la URL.' });
+    
     try {
-      const result = await pool.query(
-        `SELECT status FROM tables WHERE id = $1 AND restaurant_id = $2`,
-        [tableId, restaurantId]
-      );
-  
-      if (result.rowCount === 0) {
-        return res.status(404).json({ error: 'Mesa no encontrada.' });
-      }
-  
-      res.json({ status: result.rows[0].status });
+        const status = await getStatusByTable(restaurantId, tableId);
+
+        if (!status) return res.status(404).json({ error: 'Mesa no encontrada.' });
+        
+        res.json({ status });
     } catch (err) {
-      console.error('❌ Error en getTableStatus:', err);
-      res.status(500).json({ error: 'Error en el servidor.' });
+      console.error('Error al obtener estado de la mesa:', err);
+      res.status(500).json({ error: 'Error al obtener estado de la mesa.' });
     }
   };
   
-
 module.exports = {placeOrder, getTableStatus};

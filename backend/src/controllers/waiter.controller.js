@@ -1,72 +1,59 @@
 const { Pool } = require("pg");
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 const bcrypt = require("bcryptjs");
 const crypto = require('crypto');
 
-const getTables = async (req, res) => {
-    try {
-        const { restaurantId } = req.query;
-        if (!restaurantId) return res.status(400).json({ message: "Se requiere un restaurantId." });
-        
-        const tables = await pool.query(
-            `SELECT t.id, t.table_number,
-              CASE 
-                WHEN t.status = 'paid' THEN 'paid'
-                WHEN t.status = 'occupied' THEN 'occupied'
-                WHEN COUNT(o.id) > 0 THEN 'occupied'
-                ELSE 'available'
-              END AS status
-            FROM tables t
-            LEFT JOIN orders o ON t.id = o.table_id AND o.status IN ('pending')
-            WHERE t.restaurant_id = $1
-            GROUP BY t.id, t.status, t.table_number`,
-            [restaurantId]
-        );
+const { findUserByEmail} = require("../models/admin.model");
+const {
+  findTablesByRestaurant,
+  deletePendingOrdersByTable,
+  updateTableStatusInDb,
+  findWaitersByRestaurant,
+  findWaiterById,
+  insertWaiter,
+  deleteWaiterById,
+  findPendingOrdersByTable,
+  findOrderItemForRemoval,
+  updateItem,
+  removeOrderItemById,
+  updateOrderItemsTotals,
+  clearSessionTokenForTable,
+  generateSessionTokenForTable,
+  clearTableOrders } = require('../models/waiter.model');
 
-        res.json(tables.rows);
-    } catch (error) {
-        console.error("❌ Error obteniendo mesas:", error);
-        res.status(500).json({ message: "Error en el servidor." });
-    }
+const getTables = async (req, res) => {
+  const { restaurantId } = req.query;
+
+  if (!restaurantId) return res.status(400).json({ message: "Faltan parámetros en la URL." });
+  
+  try {
+    const tables = await findTablesByRestaurant(restaurantId);
+
+    res.json(tables);
+  } catch (error) {
+    console.error("Error obteniendo mesas:", error);
+    res.status(500).json({ message: "Error obteniendo mesas." });
+  }
 };
 
 const updateTableStatus = async (req, res) => {
   const { table_id } = req.params;
   const { status } = req.body;
 
-  if (!['available', 'occupied', 'paid'].includes(status)) {
-    return res.status(400).json({ message: "Estado inválido." });
-  }
-
+  if (!['available', 'occupied', 'paid'].includes(status)) return res.status(400).json({ message: "Estado inválido." });
+  
   try {
     await pool.query('BEGIN');
 
     if (status === 'available') {
-      const activeOrders = await pool.query(
-        `SELECT id FROM orders WHERE table_id = $1 AND status IN ('pending')`,
-        [table_id]
-      );
+      const pending = await findPendingOrdersByTable(table_id);
+      const orderIds = pending.map(o => o.id);
 
-      const orderIds = activeOrders.rows.map(r => r.id);
-
-      if (orderIds.length > 0) {
-        await pool.query(
-          `DELETE FROM order_items WHERE order_id = ANY($1::uuid[])`,
-          [orderIds]
-        );
-
-        await pool.query(
-          `DELETE FROM orders WHERE id = ANY($1::uuid[])`,
-          [orderIds]
-        );
-      }
+      if (orderIds.length > 0) await deletePendingOrdersByTable(orderIds);
     }
 
-    await pool.query(
-      `UPDATE tables SET status = $1, updated_at = NOW() WHERE id = $2`,
-      [status, table_id]
-    );
-
+    await updateTableStatusInDb(table_id, status);
     await pool.query('COMMIT');
 
     if (global.websocket) global.websocket.updateStatusTable('updateTableStatus', JSON.stringify({ tableId: Number(table_id), status }));
@@ -80,142 +67,96 @@ const updateTableStatus = async (req, res) => {
 };
 
 const getWaiters = async (req, res) => {
-    const { restaurantId } = req.query; 
+  const { restaurantId } = req.query; 
 
-    if (!restaurantId) {
-        return res.status(400).json({ success: false, message: "Se requiere restaurantId" });
-    }
+  if (!restaurantId) return res.status(400).json({ success: false, message: "Faltan parámetros en la URL." });
+  
+  try {
+    const waiters = await findWaitersByRestaurant(restaurantId);
 
-    try {
-        const result = await pool.query(
-            "SELECT * FROM users WHERE role = 'waiter' AND id IN (SELECT user_id FROM user_restaurant WHERE restaurant_id = $1)",
-            [restaurantId]
-        );
-        res.json(result.rows);
-    } catch (error) {
-        console.error("❌ Error al obtener meseros:", error);
-        res.status(500).json({ success: false, message: "Error en el servidor" });
-    }
+    res.json(waiters);
+  } catch (error) {
+    console.error("Error al obtener meseros:", error);
+    res.status(500).json({ success: false, message: "Error al obtener meseros." });
+  }
 };
 
 const registerWaiter = async (req, res) => {
-    const { restaurantId, fullName, email, phone, password } = req.body;
+  const { restaurantId, fullName, email, phone, password } = req.body;
 
-    if (!restaurantId || !fullName || !email || !phone || !password) {
-        return res.status(400).json({ success: false, message: "Todos los campos son obligatorios." });
-    }
+  if (!restaurantId || !fullName || !email || !phone || !password) return res.status(400).json({ success: false, message: "Todos los campos son obligatorios." });
+    
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    if (await findUserByEmail(email)) return res.status(409).json({ success: false, message: "El correo ya está registrado." });
 
-    try {
-        const userExists = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
-        if (userExists.rowCount > 0) {
-            return res.status(409).json({ success: false, message: "El correo ya está registrado." });
-        }
+    await insertWaiter({ fullName, email, phone, hashedPassword, restaurantId });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newUser = await pool.query(
-            `INSERT INTO users (full_name, email, phone, password_hash, role) 
-             VALUES ($1, $2, $3, $4, 'waiter') RETURNING id`,
-            [fullName, email, phone, hashedPassword]
-        );
-
-        const waiterId = newUser.rows[0].id;
-
-        await pool.query(
-            `INSERT INTO user_restaurant (user_id, restaurant_id, role) 
-             VALUES ($1, $2, 'waiter')`,
-            [waiterId, restaurantId]
-        );
-
-        res.json({ success: true, message: "Mesero registrado correctamente." });
-
-    } catch (error) {
-        console.error("❌ Error al registrar mesero:", error);
-        res.status(500).json({ success: false, message: "Error en el servidor." });
-    }
+    res.json({ success: true, message: "Mesero registrado correctamente." });
+  } catch (error) {
+    console.error("Error al registrar mesero:", error);
+    res.status(500).json({ success: false, message: "Error al registrar mesero." });
+  }
 };
 
 
 const deleteWaiter = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const waiterCheck = await pool.query("SELECT id FROM users WHERE id = $1 AND role = 'waiter'", [id]);
+  const { id } = req.params;
 
-        if (waiterCheck.rowCount === 0) {
-            return res.status(404).json({ success: false, message: "Mesero no encontrado." });
-        }
+  try {
+    const waiterCheck = await findWaiterById(id);
 
-        await pool.query("DELETE FROM user_restaurant WHERE user_id = $1", [id]);
-        await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    if (!waiterCheck) return res.status(404).json({ success: false, message: "Mesero no encontrado." });
+    
+    await deleteWaiterById(id);
 
-        res.json({ success: true, message: "Mesero eliminado correctamente." });
-    } catch (error) {
-        console.error("❌ Error al eliminar mesero:", error);
-        res.status(500).json({ success: false, message: "Error en el servidor." });
-    }
+    res.json({ success: true, message: "Mesero eliminado correctamente." });
+  } catch (error) {
+    console.error("Error al eliminar mesero:", error);
+    res.status(500).json({ success: false, message: "Error al eliminar mesero." });
+  }
 };
 
 const updateOrderItem = async (req, res) => {
     const { restaurantId, tableId, itemName, removalQuantity } = req.body;
-    if (!restaurantId || !tableId || !itemName || removalQuantity === undefined) {
-      return res.status(400).json({ success: false, message: "Faltan parámetros." });
-    }
+
     let quantityToRemove = Number(removalQuantity);
-    if (isNaN(quantityToRemove) || quantityToRemove < 1) {
-      return res.status(400).json({ success: false, message: "Cantidad inválida." });
-    }
-  
+
+    if (!restaurantId || !tableId || !itemName || removalQuantity === undefined) return res.status(400).json({ success: false, message: "Faltan parámetros." });
+    if (isNaN(quantityToRemove) || quantityToRemove < 1) return res.status(400).json({ success: false, message: "Cantidad inválida." });
+    
     try {
       await pool.query("BEGIN");
   
-      const ordersResult = await pool.query(
-        "SELECT * FROM orders WHERE table_id = $1 AND status = 'pending' ORDER BY created_at ASC",
-        [tableId]
-      );
-      if (ordersResult.rowCount === 0) {
+      const pending = await findPendingOrdersByTable(tableId);
+
+      if (pending.length === 0) {
         await pool.query("ROLLBACK");
         return res.status(404).json({ success: false, message: "No hay pedidos pendientes para esta mesa." });
       }
   
-      let quantityLeft = quantityToRemove;
-      for (let order of ordersResult.rows) {
-        const orderItemResult = await pool.query(
-          `SELECT oi.id, oi.quantity, oi.subtotal, mi.price
-           FROM order_items oi
-           JOIN menu_items mi ON oi.menu_item_id = mi.id
-           WHERE oi.order_id = $1 AND mi.name = $2
-           LIMIT 1`,
-          [order.id, itemName]
-        );
-        if (orderItemResult.rowCount === 0) continue;
-  
-        const orderItem = orderItemResult.rows[0];
-        const itemQuantity = orderItem.quantity;
-        const unitPrice = parseFloat(orderItem.price);
+      for (let order of pending) {
+        const row = await findOrderItemForRemoval(order.id,itemName);
+        if (!row) continue;
+
+        const itemQuantity = row.quantity;
+        const unitPrice = row.price;
+
+        let quantityLeft = quantityToRemove;
   
         if (quantityLeft < itemQuantity) {
           const newQuantity = itemQuantity - quantityLeft;
           const newSubtotal = unitPrice * newQuantity;
-          await pool.query(
-            "UPDATE order_items SET quantity = $1, subtotal = $2 WHERE id = $3",
-            [newQuantity, newSubtotal, orderItem.id]
-          );
+
+          await updateItem(row.id, newQuantity, newSubtotal);
           quantityLeft = 0;
+
         } else {
-          await pool.query("DELETE FROM order_items WHERE id = $1", [orderItem.id]);
+          removeOrderItemById(row.id);
           quantityLeft -= itemQuantity;
         }
   
-        const totalResult = await pool.query(
-          "SELECT COALESCE(SUM(subtotal), 0) AS total FROM order_items WHERE order_id = $1",
-          [order.id]
-        );
-        const newTotalPrice = totalResult.rows[0].total;
-        if (newTotalPrice > 0) {
-          await pool.query("UPDATE orders SET total_price = $1 WHERE id = $2", [newTotalPrice, order.id]);
-        } else {
-          await pool.query("DELETE FROM orders WHERE id = $1", [order.id]);
-        }
+        await updateOrderItemsTotals(order.id);
         if (quantityLeft <= 0) break;
       }
       await pool.query("COMMIT");
@@ -227,20 +168,10 @@ const updateOrderItem = async (req, res) => {
         });
       }
 
-      const remainingOrders = await pool.query(
-        `SELECT id FROM orders WHERE table_id = $1 AND status IN ('pending')`,
-        [tableId]
-      );
+      const remainingOrders = await findPendingOrdersByTable(tableId);
       
-      if (remainingOrders.rowCount === 0) {
-        await pool.query(
-          `UPDATE tables 
-           SET status = 'available', 
-               session_token = NULL, 
-               session_expires_at = NULL 
-           WHERE id = $1 AND restaurant_id = $2`,
-          [tableId, restaurantId]
-        );
+      if (remainingOrders.length === 0) {
+        await clearSessionTokenForTable(restaurantId, tableId);
         res.clearCookie('valid', { path: '/' });
         if (global.websocket) global.websocket.updateStatusTable('updateTableStatus',JSON.stringify({ tableId, status: 'available' }));
       }
@@ -256,25 +187,18 @@ const updateOrderItem = async (req, res) => {
 const generateTableSessionToken = async (req, res) => {
     const { restaurantId, tableId } = req.body;
   
-    if (!restaurantId || !tableId) {
-      return res.status(400).json({ error: 'Faltan parámetros' });
-    }
-  
+    if (!restaurantId || !tableId) return res.status(400).json({ error: 'Faltan parámetros en la URL.' });
+    
     try {
       const token = generateSessionToken(restaurantId, tableId);
       const expiration = new Date(Date.now() + 200 * 60000); 
   
-      await pool.query(
-        `UPDATE tables 
-         SET session_token = $1, session_expires_at = $2
-         WHERE restaurant_id = $3 AND id = $4`,
-        [token, expiration, restaurantId, tableId]
-      );
+      await generateSessionTokenForTable(restaurantId, tableId, token, expiration);
   
       return res.status(200).json({ success: true, token });
     } catch (err) {
-      console.error('❌ Error generando session token:', err);
-      return res.status(500).json({ error: 'Error interno del servidor' });
+      console.error('Error generando token de sesión de mesa:', err);
+      return res.status(500).json({ error: 'Error generando token de sesión de mesa' });
     }
 };
 
@@ -286,43 +210,22 @@ function generateSessionToken(restaurantId, tableId) {
 }
 
 const clearTable = async (req, res) => {
-  const rawTableId = req.body.tableId;
-  const rawRestauranteId = req.body.restaurantId;
+  const rawTableId = req.body.tableId, rawRestauranteId = req.body.restaurantId;
+  const tableId = Number(rawTableId), restaurantId = Number(rawRestauranteId);
 
-  const tableId = Number(rawTableId);
-  const restaurantId = Number(rawRestauranteId);
-
-  if (!tableId || isNaN(tableId || !restaurantId || isNaN(restaurantId))) return res.status(400).json({ error: 'tableId o restaurantId inválidos' });
+  if (!tableId || isNaN(tableId || !restaurantId || isNaN(restaurantId))) return res.status(400).json({ error: 'Parámetros inválidos' });
   
   try {
-    // Borrar token de sesión de la mesa
-    const result = await pool.query(
-      `UPDATE tables
-       SET session_token = NULL, session_expires_at = NULL
-       WHERE id = $1`,
-      [tableId]
-    );
-
-    if (result.rowCount === 0) return res.status(404).json({ error: 'Mesa no encontrada o ya está limpia' });
-
-    // Borrar pedidos de la mesa
-    await pool.query(
-      `DELETE FROM orders o
-         USING tables t
-        WHERE o.table_id = t.id
-          AND t.restaurant_id = $1
-          AND t.id          = $2`,
-      [restaurantId, tableId]
-    );
+    await clearSessionTokenForTable(restaurantId, tableId);
+    await clearTableOrders(restaurantId, tableId);
 
     res.clearCookie('valid', { path: '/' });
 
     return res.status(200).json({ success: true, message: 'Token de sesión o cookie y pedidos eliminados correctamente.' });
   } catch (err) {
-    console.error('❌ Error al limpiar la mesa:', err);
-    return res.status(500).json({ error: 'Error interno del servidor' });
+    console.error('Error al limpiar la mesa:', err);
+    return res.status(500).json({ error: 'Error al limpiar la mesa' });
   }
 };
-
 
 module.exports = {deleteWaiter, registerWaiter, getWaiters, updateTableStatus, getTables, updateOrderItem, generateTableSessionToken, clearTable };

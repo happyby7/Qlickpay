@@ -98,10 +98,13 @@
       const amount = mode === 'split-items' ? totalSelected : customAmount;
       if (amount <= 0) return;
 
-      const suffix = mode === 'split-items' ? '-split' : mode === 'custom' ? '-custom' : '';
-      const orderId = `${restaurantId}-${tableId}${suffix}`;
+      const orderId = `${restaurantId}-${tableId}`;
 
-      const metadata: Record<string, string> = { order_id: orderId };
+      const metadata: Record<string, string> = { 
+        order_id: orderId,
+        table_id: String(tableId),
+        mode: mode === 'split-items' ? 'split' : mode === 'custom' ? 'custom' : 'full',
+      };
       
       if (mode === 'split-items') {
         const itemsToPay = bill!.items
