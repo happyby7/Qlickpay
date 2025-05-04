@@ -66,7 +66,7 @@
   
     function increaseQuantity(i: number) {
       const item = bill!.items[i];
-      const unitPrice = item.quantity ? item.subtotal / item.quantity : 0;
+      const unitPrice = item.quantity ? Math.round((item.subtotal * 100) / item.quantity) / 100 : 0;
       const maxQty = getMaxSelectable(item.quantity);
 
       if ((selectedQuantities[i] || 0) < maxQty && totalSelected + unitPrice <= pendingTotal) selectedQuantities[i] += 1;
