@@ -1,19 +1,5 @@
-/*
- * Descripción: Definición del esquema de base de datos PostgreSQL para el proyecto.
- * Esta definición incluye la configuración de extensiones, tipos ENUM,
- * funciones, triggers, tablas, relaciones e índices para el correcto
- * funcionamiento de la aplicación. El script es idempotente y puede
- * ejecutarse múltiples veces sin causar conflictos.
- */
-
--- ---------------------------------------------------------
--- 0. Extensión para generación de UUID
--- ---------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- ---------------------------------------------------------
--- 1. Función para actualizar automáticamente updated_at
--- ---------------------------------------------------------
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -22,10 +8,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ---------------------------------------------------------
--- 2. Definición de tipos ENUM para normalizar estados y tipos
--- ---------------------------------------------------------
---  Definición de tipo ENUM para estado de los pedidos
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status_enum') THEN
@@ -33,15 +16,6 @@ BEGIN
   END IF;
 END$$;
 
---  Definición de tipo ENUM para estado de los items de pedido
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_item_status_enum') THEN
-    CREATE TYPE order_item_status_enum AS ENUM ('pending', 'paid');
-  END IF;
-END$$;
-
--- Definición de tipo ENUM para estado de las mesas
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'table_status_enum') THEN
@@ -49,7 +23,6 @@ BEGIN
   END IF;
 END$$;
 
---  Definición de tipo ENUM para tipos de pedidos
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_type_enum') THEN
@@ -57,7 +30,6 @@ BEGIN
   END IF;
 END$$;
 
--- Definición de tipo ENUM para roles de usuario
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'role_enum') THEN
@@ -65,11 +37,8 @@ BEGIN
   END IF;
 END$$;
 
--- ---------------------------------------------------------
--- 3. Creación de Tablas y Relaciones
--- ---------------------------------------------------------
 
--- 3.1. Tabla users (UUID para la PK)
+
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   full_name VARCHAR(255) NOT NULL,
@@ -90,7 +59,6 @@ BEGIN
   END IF;
 END$$;
 
--- 3.2. Tabla restaurants
 CREATE TABLE IF NOT EXISTS restaurants (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
@@ -109,7 +77,6 @@ BEGIN
   END IF;
 END$$;
 
--- 3.3. Tabla user_restaurant
 CREATE TABLE IF NOT EXISTS user_restaurant (
   user_id UUID NOT NULL,
   restaurant_id INTEGER NOT NULL,
@@ -130,7 +97,6 @@ BEGIN
   END IF;
 END$$;
 
--- 3.4. Tabla qr_codes
 CREATE TABLE IF NOT EXISTS qr_codes (
   id SERIAL PRIMARY KEY,
   code VARCHAR(100) NOT NULL UNIQUE,
@@ -150,7 +116,6 @@ BEGIN
   END IF;
 END$$;
 
--- 3.5. Tabla tables
 CREATE TABLE IF NOT EXISTS tables (
   id SERIAL PRIMARY KEY,
   restaurant_id INTEGER NOT NULL,
@@ -175,7 +140,6 @@ BEGIN
   END IF;
 END$$;
 
--- 3.6. Tabla menu_items
 CREATE TABLE IF NOT EXISTS menu_items (
   id SERIAL PRIMARY KEY,
   restaurant_id INTEGER NOT NULL,
@@ -197,13 +161,12 @@ BEGIN
   END IF;
 END$$;
 
--- 3.7. Tabla orders
 CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   table_id INTEGER NOT NULL,
   user_id UUID,
   order_type order_type_enum NOT NULL DEFAULT 'manual',
-  status order_status_enum NOT NULL,
+  status order_status_enum NOT NULL DEFAULT 'pending',
   total_price NUMERIC(10,2) NOT NULL CHECK (total_price > 0),
   is_paid BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -221,14 +184,13 @@ BEGIN
   END IF;
 END$$;
 
--- 3.8. Tabla order_items
 CREATE TABLE IF NOT EXISTS order_items (
   id SERIAL PRIMARY KEY,
   order_id UUID NOT NULL,
   menu_item_id INTEGER NOT NULL,
   quantity NUMERIC(10,2) NOT NULL,
   subtotal NUMERIC(10,2) NOT NULL,
-  status order_item_status_enum NOT NULL DEFAULT 'pending',
+  status order_status_enum NOT NULL DEFAULT 'pending',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
@@ -243,12 +205,3 @@ BEGIN
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
   END IF;
 END$$;
-
--- ---------------------------------------------------------
--- 4. Creación de Índices para Optimización
--- ---------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_tables_restaurant_id ON tables (restaurant_id);
-CREATE INDEX IF NOT EXISTS idx_menu_items_restaurant_id ON menu_items (restaurant_id);
-CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items (order_id);
-CREATE INDEX IF NOT EXISTS idx_order_items_menu_item_id ON order_items (menu_item_id);
-CREATE INDEX IF NOT EXISTS idx_orders_table_id ON orders(table_id);

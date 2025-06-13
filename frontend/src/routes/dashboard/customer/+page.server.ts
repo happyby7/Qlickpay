@@ -10,7 +10,7 @@ export const load: PageServerLoad = async ({ parent }) => {
   if (user && user.role === 'customer') {
     currentUser = user;
   } else if (!user) {
-    currentUser = { id: '0', role: 'Usuario', name: 'invitado' };
+    currentUser = { id: '0', role: 'Invitado', name: 'invitado' };
   } else {
     console.error('No tienes permisos de cliente. Redirigiendo...');
     throw redirect(302, `/`);

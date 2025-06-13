@@ -6,21 +6,22 @@ const crypto = require('crypto');
 
 const { findUserByEmail} = require("../models/admin.model");
 const {
-  findTablesByRestaurant,
-  deletePendingOrdersByTable,
-  updateTableStatusInDb,
-  findWaitersByRestaurant,
-  findWaiterById,
-  insertWaiter,
-  deleteWaiterById,
-  findPendingOrdersByTable,
-  findOrderItemForRemoval,
-  updateItem,
-  removeOrderItemById,
-  updateOrderItemsTotals,
-  clearSessionTokenForTable,
-  generateSessionTokenForTable,
-  clearTableOrders } = require('../models/waiter.model');
+    findTablesByRestaurant,
+    deletePendingOrdersByTable,
+    updateTableStatusInDb,
+    findWaitersByRestaurant,
+    findWaiterById,
+    insertWaiter,
+    deleteWaiterById,
+    findPendingOrdersByTable,
+    findOrderItemForRemoval,
+    updateItem,
+    removeOrderItemById,
+    updateOrderItemsTotals,
+    clearSessionTokenForTable,
+    generateSessionTokenForTable,
+    clearTableOrders
+} = require('../models/waiter.model');
 
 const getTables = async (req, res) => {
   const { restaurantId } = req.query;
