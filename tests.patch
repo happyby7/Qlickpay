@@ -1,0 +1,24 @@
+diff --git a/backend/tests/userController.test.js b/backend/tests/userController.test.js
+new file mode 100644
+--- /dev/null
++++ b/backend/tests/userController.test.js
+@@ ... @@
+const request = require('supertest');
+const app = require('../app'); // Adjust if your Express app is exported elsewhere
+const { getUser, createUser } = require('../userController');
+
+describe('userController', () => {
+  describe('getUser', () => {
+    it('should be tested', async () => {
+      // TODO: implement test for getUser
+      expect(typeof getUser).toBe('function');
+    });
+  });
+
+  describe('createUser', () => {
+    it('should be tested', async () => {
+      // TODO: implement test for createUser
+      expect(typeof createUser).toBe('function');
+    });
+  });
+});
