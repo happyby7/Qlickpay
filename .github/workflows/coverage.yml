@@ -2,28 +2,64 @@ name: Coverage
 
 on:
   push:
+    branches:
+      - main
+      - develop
   pull_request:
 
 jobs:
-  coverage:
+  backend:
+    name: Backend Coverage
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js (Backend)
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies (Backend)
+        run: npm ci
 
-      - name: Run tests with coverage
+      - name: Run tests with coverage (Backend)
         run: npm test -- --coverage
 
-      - name: Upload coverage report
+      - name: Upload backend coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: coverage/coverage-summary.json
+          name: backend-coverage-report
+          path: backend/coverage/coverage-summary.json
+
+  frontend:
+    name: Frontend Coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (Frontend)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies (Frontend)
+        run: npm ci
+
+      - name: Run unit tests with coverage (Frontend)
+        run: npm run test:coverage
+
+      - name: Upload frontend coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          path: frontend/coverage/coverage-summary.json
