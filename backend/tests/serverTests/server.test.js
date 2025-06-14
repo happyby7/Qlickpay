@@ -1,3 +1,9 @@
+jest.mock('stripe', () => {
+  return jest.fn(() => ({
+    checkout: { sessions: { create: jest.fn(), retrieve: jest.fn(), expire: jest.fn() } }
+  }));
+});
+
 jest.mock('src/websockets/websocket.js', () => ({
   initWebSocket: jest.fn(() => ({
     newOrderEvent: jest.fn(),
