@@ -121,7 +121,8 @@ const deleteWaiter = async (req, res) => {
 const updateOrderItem = async (req, res) => {
     const { restaurantId, tableId, itemName, removalQuantity } = req.body;
 
-    let quantityToRemove = Number(removalQuantity);
+    const quantityToRemove = Number(removalQuantity);
+    let quantityLeft = quantityToRemove; 
 
     if (!restaurantId || !tableId || !itemName || removalQuantity === undefined) return res.status(400).json({ success: false, message: "Faltan parámetros." });
     if (isNaN(quantityToRemove) || quantityToRemove < 1) return res.status(400).json({ success: false, message: "Cantidad inválida." });
@@ -142,8 +143,6 @@ const updateOrderItem = async (req, res) => {
 
         const itemQuantity = row.quantity;
         const unitPrice = row.price;
-
-        let quantityLeft = quantityToRemove;
   
         if (quantityLeft < itemQuantity) {
           const newQuantity = itemQuantity - quantityLeft;

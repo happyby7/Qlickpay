@@ -1,7 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require('jsonwebtoken');
 
-const { sendVerificationEmail } = require('../services/email');
 const { createUser, findRestaurantIdByUserId, getTokenTable} = require("../models/auth.model");
 const { findUserByEmail} = require("../models/admin.model");
 
@@ -11,7 +10,6 @@ const register = async (req, res) => {
     
     try {
         await createUser({ full_name, email, password_hash: hashedPassword, role });
-        //await sendVerificationEmail(email);
         res.status(201).json({ message: "Usuario registrado correctamente. Verifique su correo." });
     } catch (error) {
         res.status(500).json({ error: "Error al registrar usuario" });

@@ -31,20 +31,19 @@ const StripeCheckoutSession = async (req, res) => {
     res.json({ url: session.url });
   } catch (err) {
     console.error('Error al crear sesión de pago:', err);
-    res.status(500).json({ error: 'No se pudo crear la sesión de pago.' });
+    res.status(500).json({error: 'No se pudo crear la sesión de pago.' });
    }
 };
 
 const StripeConfirmSuccess = async (req, res) => {
   const sessionId = req.query.session_id;
-
   let tableId;
 
-  if (!sessionId) return res.redirect(302, `${process.env.FRONTEND_URL}/payment/cancel?error=${encodeURIComponent('Falta el session_id')}`);
+  if (!sessionId) return res.redirect(302, `${process.env.FRONTEND_URL}/payment/cancel?error=Falta el session_id`);
   
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    const tableId = parseInt(session.metadata.table_id, 10);
+    tableId = parseInt(session.metadata.table_id, 10);
     const mode = session.metadata.mode; 
  
     await handleSuccessfulPayment(tableId, mode, session.metadata);
@@ -52,9 +51,11 @@ const StripeConfirmSuccess = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Error confirmando pago:', err);
-    return res.redirect(302, `${process.env.FRONTEND_URL}/payment/cancel?error=${encodeURIComponent(err.message)}`);
+    return res.redirect(302, `${process.env.FRONTEND_URL}/payment/cancel?error=${err.message}`);
   } finally {
-    if (typeof tableId === 'number') releaseCheckoutLock(tableId);
+    if (typeof tableId === 'number') {
+     releaseCheckoutLock(tableId);
+    }
   }
 };
 
